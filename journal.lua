@@ -1,24 +1,31 @@
 -- multi api compat
 local compat = pfQuestCompat
+
+-- Performance: cache frequently-used globals
+local pairs = pairs
+local min, max = math.min, math.max
+local getn = table.getn
+local date = date
+local GetTime = GetTime
+local MouseIsOver = MouseIsOver
+
 local collapsed = {}
 
 local function tablesize(tbl)
   local count = 0
-  for _ in pairs(tbl) do count = count + 1 end
+  for _ in pairs(tbl) do
+    count = count + 1
+  end
   return count
 end
 
-local function OnUpdate()
-  if not this.column and MouseIsOver(this) then
+local function OnEnter()
+  -- show remove button and highlight for quest entries (not column headers)
+  if not this.column then
     this.remove:Show()
     this.bg:Show()
-  else
-    this.remove:Hide()
-    this.bg:Hide()
   end
-end
 
-local function OnEnter()
   if this.id then
     -- show extended quest tooltip
     pfDatabase:ShowExtendedTooltip(this.id, GameTooltip, this, "ANCHOR_LEFT", 0, -10)
@@ -34,6 +41,8 @@ local function OnEnter()
 end
 
 local function OnLeave()
+  this.remove:Hide()
+  this.bg:Hide()
   GameTooltip:Hide()
 end
 
@@ -61,17 +70,18 @@ local function RemoveOnClick()
 end
 
 local function CreateEntry(self, index)
-  if self[index] then return end
+  if self[index] then
+    return
+  end
 
   self[index] = CreateFrame("Button", nil, self)
-  self[index]:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -(index-1)*19-10)
-  self[index]:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, -(index-1)*19-10)
+  self[index]:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -(index - 1) * 19 - 10)
+  self[index]:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, -(index - 1) * 19 - 10)
   self[index]:SetHeight(18)
 
   self[index]:SetScript("OnEnter", OnEnter)
   self[index]:SetScript("OnLeave", OnLeave)
   self[index]:SetScript("OnClick", OnClick)
-  self[index]:SetScript("OnUpdate", OnUpdate)
 
   self[index].text = self[index]:CreateFontString("Caption", "LOW", "GameFontWhite")
   self[index].text:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
@@ -81,33 +91,39 @@ local function CreateEntry(self, index)
 
   self[index].bg = self[index]:CreateTexture(nil, "BACKGROUND")
   self[index].bg:SetAllPoints(self[index].text)
-  self[index].bg:SetTexture(1,1,1,.02)
+  self[index].bg:SetTexture(1, 1, 1, 0.02)
+  self[index].bg:Hide()
 
   self[index].remove = CreateFrame("Button", nil, self[index])
   self[index].remove:SetPoint("RIGHT", -5, 0)
   self[index].remove:SetHeight(20)
   self[index].remove:SetWidth(20)
+  self[index].remove:Hide()
   self[index].remove:SetScript("OnClick", RemoveOnClick)
   self[index].remove.entry = self[index]
   self[index].remove.view = self
   self[index].remove.texture = self[index].remove:CreateTexture("pfQuestionDialogCloseTex")
-  self[index].remove.texture:SetTexture(pfQuestConfig.path.."\\compat\\close")
+  self[index].remove.texture:SetTexture(pfQuestConfig.path .. "\\compat\\close")
   self[index].remove.texture:ClearAllPoints()
-  self[index].remove.texture:SetVertexColor(1,.25,.25,1)
+  self[index].remove.texture:SetVertexColor(1, 0.25, 0.25, 1)
   self[index].remove.texture:SetPoint("TOPLEFT", self[index].remove, "TOPLEFT", 4, -4)
   self[index].remove.texture:SetPoint("BOTTOMRIGHT", self[index].remove, "BOTTOMRIGHT", -4, 4)
 end
 
 local function UpdateEntry(self, index)
   if self[index].column then
-    self[index].text:SetText((collapsed[self[index].column] and "|cff338855" or "|cff33ffcc")..self[index].column)
+    self[index].remove:Hide()
+    self[index].bg:Hide()
+    self[index].text:SetText((collapsed[self[index].column] and "|cff338855" or "|cff33ffcc") .. self[index].column)
     self[index]:Show()
   elseif self[index].id then
     local qid = tonumber(self[index].id) or UNKNOWN
     local name = pfDB["quests"]["loc"][self[index].id] and pfDB["quests"]["loc"][self[index].id]["T"] or self[index].id
     local log = pfQuest_history[self[index].id][1]
     local level = pfQuest_history[self[index].id][2]
-    self[index].text:SetText("  |cffffffff" .. date("%H:%M:%S", log) .. "  |cffffcc00[" .. (name or UNKNOWN) .. "]|cffaaaaaa (" .. qid ..")")
+    self[index].text:SetText(
+      "  |cffffffff" .. date("%H:%M:%S", log) .. "  |cffffcc00[" .. (name or UNKNOWN) .. "]|cffaaaaaa (" .. qid .. ")"
+    )
     self[index]:Show()
   else
     self[index]:Hide()
@@ -127,21 +143,21 @@ local function ReloadJournal(self)
 
     if column ~= lastcolumn then -- add columns to the view
       lastcolumn = column
-      journal[index] = journal[index] or { }
+      journal[index] = journal[index] or {}
       journal[index].column = column
       journal[index].id = nil
       index = index + 1
     end
 
     if not collapsed[column] then -- add regular entries
-      journal[index] = journal[index] or { }
+      journal[index] = journal[index] or {}
       journal[index].column = nil
       journal[index].id = questid
       index = index + 1
     end
   end
 
-  for index=index, table.getn(journal) do
+  for index = index, table.getn(journal) do
     journal[index] = nil
   end
 
@@ -153,8 +169,8 @@ local function ReloadJournal(self)
   -- draw journal into view
   for id = 1, maxcolumns do
     CreateEntry(self, id)
-    self[id].id = journal[id+self.offset] and journal[id+self.offset].id or nil
-    self[id].column = journal[id+self.offset] and journal[id+self.offset].column or nil
+    self[id].id = journal[id + self.offset] and journal[id + self.offset].id or nil
+    self[id].column = journal[id + self.offset] and journal[id + self.offset].column or nil
     UpdateEntry(self, id)
   end
 end
@@ -168,11 +184,11 @@ pfJournal:SetPoint("RIGHT", -80, 0)
 pfJournal:SetFrameStrata("FULLSCREEN_DIALOG")
 pfJournal:SetMovable(true)
 pfJournal:EnableMouse(true)
-pfJournal:SetScript("OnMouseDown",function()
+pfJournal:SetScript("OnMouseDown", function()
   this:StartMoving()
 end)
 
-pfJournal:SetScript("OnMouseUp",function()
+pfJournal:SetScript("OnMouseUp", function()
   this:StopMovingOrSizing()
 end)
 
@@ -190,14 +206,16 @@ pfJournal.close = CreateFrame("Button", "pfQuestJournalClose", pfJournal)
 pfJournal.close:SetPoint("TOPRIGHT", -5, -5)
 pfJournal.close:SetHeight(20)
 pfJournal.close:SetWidth(20)
-pfJournal.close:SetScript("OnClick", function() this:GetParent():Hide() end)
+pfJournal.close:SetScript("OnClick", function()
+  this:GetParent():Hide()
+end)
 pfJournal.close.texture = pfJournal.close:CreateTexture("pfQuestionDialogCloseTex")
-pfJournal.close.texture:SetTexture(pfQuestConfig.path.."\\compat\\close")
+pfJournal.close.texture:SetTexture(pfQuestConfig.path .. "\\compat\\close")
 pfJournal.close.texture:ClearAllPoints()
-pfJournal.close.texture:SetVertexColor(1,.25,.25,1)
+pfJournal.close.texture:SetVertexColor(1, 0.25, 0.25, 1)
 pfJournal.close.texture:SetPoint("TOPLEFT", pfJournal.close, "TOPLEFT", 4, -4)
 pfJournal.close.texture:SetPoint("BOTTOMRIGHT", pfJournal.close, "BOTTOMRIGHT", -4, 4)
-pfUI.api.SkinButton(pfJournal.close, 1, .5, .5)
+pfUI.api.SkinButton(pfJournal.close, 1, 0.5, 0.5)
 
 pfJournal.entries = CreateFrame("Button", "pfQuestJournalEntries", pfJournal)
 pfJournal.entries.ReloadJournal = ReloadJournal
@@ -211,8 +229,22 @@ end)
 
 pfJournal.entries:SetScript("OnClick", pfJournal.entries.ReloadJournal)
 pfJournal.entries:SetScript("OnUpdate", function()
-  if ( this.tick or 1) > GetTime() then return else this.tick = GetTime() + 1 end
+  -- Only reload when dirty flag is set (avoids polling every second)
+  -- The dirty flag is set by quest.lua when pfQuest_history changes
+  if not pfJournal.dirty then
+    return
+  end
+  if (this.tick or 1) > GetTime() then
+    return
+  end
+  this.tick = GetTime() + 0.5
+  pfJournal.dirty = nil
   this:ReloadJournal()
+end)
+
+-- Mark journal dirty when shown (initial load)
+pfJournal:SetScript("OnShow", function()
+  pfJournal.dirty = true
 end)
 
 pfUI.api.CreateBackdrop(pfJournal.entries)

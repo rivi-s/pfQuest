@@ -1,6 +1,18 @@
 -- multi api compat
 local compat = pfQuestCompat
 
+-- Performance: cache frequently-used globals
+local pairs, ipairs, next = pairs, ipairs, next
+local strfind, strlower, strsub = strfind, strlower, strsub
+local format = string.format
+local min, max, abs = math.min, math.max, math.abs
+local sqrt, sin, cos = sqrt or math.sqrt, sin or math.sin, cos or math.cos
+local floor, ceil = floor or math.floor, ceil or math.ceil
+local getn, insert = table.getn, table.insert
+local tostring, tonumber, type, unpack = tostring, tonumber, type, unpack
+local GetTime = GetTime
+local MouseIsOver = MouseIsOver
+
 -- fake the pfQuest minimap node names to Gatherer names,
 -- if any minimap-breaking addon collector is found.
 local nodename = "pfMiniMapPin"
@@ -16,7 +28,7 @@ compatnamefake:SetScript("OnEvent", function()
   this:UnregisterAllEvents()
 
   -- scan through all addons to identify button collectors
-  for i=1, GetNumAddOns() do
+  for i = 1, GetNumAddOns() do
     local name, title, notes, enabled = GetAddOnInfo(i)
     if enabled and minimapbreakers[name] then
       nodename = "GatherNoteCompatFake"
@@ -29,31 +41,37 @@ end)
 -- it also only updates the key if the mouse is over a relevant frame
 local controlkey = CreateFrame("Frame", "pfQuestControlKey", UIParent)
 controlkey:SetScript("OnUpdate", function()
-  if ( this.throttle or .2) > GetTime() then return else this.throttle = GetTime() + .2 end
+  if (this.throttle or 0.2) > GetTime() then
+    return
+  else
+    this.throttle = GetTime() + 0.2
+  end
   if WorldMapFrame:IsShown() and MouseIsOver(WorldMapFrame) or MouseIsOver(pfMap.drawlayer) then
     controlkey.pressed = IsControlKeyDown()
   end
 end)
 
-local validmaps = setmetatable({},{__mode="kv"})
-local rgbcache = setmetatable({},{__mode="kv"})
+local validmaps = setmetatable({}, { __mode = "kv" })
+local rgbcache = setmetatable({}, { __mode = "kv" })
 local minimap_sizes = pfDB["minimap"]
 local minimap_zoom = {
-  [0] = { [0] = 300,
-          [1] = 240,
-          [2] = 180,
-          [3] = 120,
-          [4] = 80,
-          [5] = 50,
-         },
+  [0] = {
+    [0] = 300,
+    [1] = 240,
+    [2] = 180,
+    [3] = 120,
+    [4] = 80,
+    [5] = 50,
+  },
 
-  [1] = { [0] = 466 + 2/3,
-          [1] = 400,
-          [2] = 333 + 1/3,
-          [3] = 266 + 2/6,
-          [4] = 200,
-          [5] = 133 + 1/3,
-        },
+  [1] = {
+    [0] = 466 + 2 / 3,
+    [1] = 400,
+    [2] = 333 + 1 / 3,
+    [3] = 266 + 2 / 6,
+    [4] = 200,
+    [5] = 133 + 1 / 3,
+  },
 }
 
 local unifiedcache = {}
@@ -63,72 +81,92 @@ local unifiedcache = {}
 -- the objects here get directly attached to the pfMap nodes
 local similar_nodes = {}
 
+-- Coordinate parse cache (shared between UpdateNodes and UpdateMinimap)
+local coord_cache = {}
+
 local function IsEmpty(tabl)
-  for k,v in pairs(tabl) do
+  for k, v in pairs(tabl) do
     return false
   end
   return true
 end
 
+-- Ensure pfQuestConfig.path exists (fallback if config.lua failed)
+local addon_path = (pfQuestConfig and pfQuestConfig.path) or "Interface\\AddOns\\pfQuest"
+
 local layers = {
   -- regular icons
-  [pfQuestConfig.path.."\\img\\available"]          = 1,
-  [pfQuestConfig.path.."\\img\\available_c"]        = 2,
-  [pfQuestConfig.path.."\\img\\complete"]           = 3,
-  [pfQuestConfig.path.."\\img\\complete_c"]         = 4,
-  [pfQuestConfig.path.."\\img\\icon_vendor"]        = 5,
-  [pfQuestConfig.path.."\\img\\fav"]                = 6,
+  [addon_path .. "\\img\\available"] = 1,
+  [addon_path .. "\\img\\available_c"] = 2,
+  [addon_path .. "\\img\\complete"] = 3,
+  [addon_path .. "\\img\\complete_c"] = 4,
+  [addon_path .. "\\img\\icon_vendor"] = 5,
+  [addon_path .. "\\img\\fav"] = 6,
 
   -- cluster textures
-  [pfQuestConfig.path.."\\img\\cluster_item"]       = 9,
-  [pfQuestConfig.path.."\\img\\cluster_mob"]        = 9,
-  [pfQuestConfig.path.."\\img\\cluster_misc"]       = 9,
-  [pfQuestConfig.path.."\\img\\cluster_mob_mono"]   = 9,
-  [pfQuestConfig.path.."\\img\\cluster_item_mono"]  = 9,
-  [pfQuestConfig.path.."\\img\\cluster_misc_mono"]  = 9,
+  [addon_path .. "\\img\\cluster_item"] = 9,
+  [addon_path .. "\\img\\cluster_mob"] = 9,
+  [addon_path .. "\\img\\cluster_misc"] = 9,
+  [addon_path .. "\\img\\cluster_mob_mono"] = 9,
+  [addon_path .. "\\img\\cluster_item_mono"] = 9,
+  [addon_path .. "\\img\\cluster_misc_mono"] = 9,
 }
 
+-- Pre-computed texture paths (avoid string concatenation in hot paths)
+local TEX_NODECUT = addon_path .. "\\img\\nodecut"
+local TEX_NODE = addon_path .. "\\img\\node"
+
 local function GetLayerByTexture(tex)
-  if layers[tex] then return layers[tex] else return 1 end
+  if layers[tex] then
+    return layers[tex]
+  else
+    return 1
+  end
 end
 
 local function minimap_indoor()
   local tempzoom = 0
-	local state = 1
-	if GetCVar("minimapZoom") == GetCVar("minimapInsideZoom") then
-		if GetCVar("minimapInsideZoom")+0 >= 3 then
-			pfMap.drawlayer:SetZoom(pfMap.drawlayer:GetZoom() - 1)
-			tempzoom = 1
-		else
-			pfMap.drawlayer:SetZoom(pfMap.drawlayer:GetZoom() + 1)
-			tempzoom = -1
-		end
-	end
+  local state = 1
+  if GetCVar("minimapZoom") == GetCVar("minimapInsideZoom") then
+    if GetCVar("minimapInsideZoom") + 0 >= 3 then
+      pfMap.drawlayer:SetZoom(pfMap.drawlayer:GetZoom() - 1)
+      tempzoom = 1
+    else
+      pfMap.drawlayer:SetZoom(pfMap.drawlayer:GetZoom() + 1)
+      tempzoom = -1
+    end
+  end
 
-	if GetCVar("minimapInsideZoom")+0 == pfMap.drawlayer:GetZoom() then
+  if GetCVar("minimapInsideZoom") + 0 == pfMap.drawlayer:GetZoom() then
     state = 0
   end
 
   pfMap.drawlayer:SetZoom(pfMap.drawlayer:GetZoom() + tempzoom)
-	return state
+  return state
 end
 
 local function str2rgb(text)
-  if not text then return 1, 1, 1 end
-  if pfQuest_colors[text] then return unpack(pfQuest_colors[text]) end
-  if rgbcache[text] then return unpack(rgbcache[text]) end
+  if not text then
+    return 1, 1, 1
+  end
+  if pfQuest_colors[text] then
+    return unpack(pfQuest_colors[text])
+  end
+  if rgbcache[text] then
+    return unpack(rgbcache[text])
+  end
   local counter = 1
   local l = string.len(text)
   for i = 1, l, 3 do
-    counter = compat.mod(counter*8161, 4294967279) +
-        (string.byte(text,i)*16776193) +
-        ((string.byte(text,i+1) or (l-i+256))*8372226) +
-        ((string.byte(text,i+2) or (l-i+256))*3932164)
+    counter = compat.mod(counter * 8161, 4294967279)
+      + (string.byte(text, i) * 16776193)
+      + ((string.byte(text, i + 1) or (l - i + 256)) * 8372226)
+      + ((string.byte(text, i + 2) or (l - i + 256)) * 3932164)
   end
-  local hash = compat.mod(compat.mod(counter, 4294967291),16777216)
-  local r = (hash - (compat.mod(hash,65536))) / 65536
-  local g = ((hash - r*65536) - ( compat.mod((hash - r*65536),256)) ) / 256
-  local b = hash - r*65536 - g*256
+  local hash = compat.mod(compat.mod(counter, 4294967291), 16777216)
+  local r = (hash - (compat.mod(hash, 65536))) / 65536
+  local g = ((hash - r * 65536) - (compat.mod((hash - r * 65536), 256))) / 256
+  local b = hash - r * 65536 - g * 256
   rgbcache[text] = { r / 255, g / 255, b / 255 }
   return unpack(rgbcache[text])
 end
@@ -139,8 +177,8 @@ local function NodeAnimate(self, zoom, alpha, fps)
   local cur_alpha = self:GetAlpha()
   local change = nil
   self:EnableMouse(true)
-  fpsmod = math.min(2/fps, 2)
-  step = fpsmod/10
+  fpsmod = math.min(2 / fps, 2)
+  step = fpsmod / 10
 
   -- update size
   if math.abs(cur_zoom - zoom) < 3 then
@@ -161,7 +199,7 @@ local function NodeAnimate(self, zoom, alpha, fps)
     self:SetAlpha(alpha)
 
     -- disable mouse on hidden
-    if alpha < .1 then
+    if alpha < 0.1 then
       self:EnableMouse(nil)
     end
   elseif cur_alpha < alpha then
@@ -176,7 +214,7 @@ local function NodeAnimate(self, zoom, alpha, fps)
 end
 
 -- put player position above everything on worldmap
-for k, v in pairs({WorldMapFrame:GetChildren()}) do
+for k, v in pairs({ WorldMapFrame:GetChildren() }) do
   if v:IsObjectType("Model") and not v:GetName() then
     if string.find(strlower(v:GetModel()), "interface\\minimap\\minimaparrow") then
       v:SetFrameLevel(255)
@@ -194,19 +232,41 @@ pfMap.mpins = {}
 pfMap.drawlayer = Minimap
 pfMap.unifiedcache = unifiedcache
 
+-- Reverse indexes for O(1) DeleteNode lookups.
+-- titleIndex[addon][title][map][coords] = true  — set by AddNode
+-- tooltipIndex[title][spawn] = true             — set by AddNode
+pfMap.titleIndex = {}
+pfMap.tooltipIndex = {}
+
+-- Set of node tables that have been modified since the last UpdateNodes call.
+-- Keyed by node table reference so the node table itself stays clean.
+-- AddNode/DeleteNode insert here; UpdateNodes reads and clears entries.
+pfMap.dirtyNodes = {}
+
+-- Set of map IDs that have at least one dirty node table.
+-- Keyed by zone map ID (integer). Allows WORLD_MAP_UPDATE to cheaply check
+-- whether the current zone has pending writes without scanning all dirtyNodes.
+pfMap.dirtyMaps = {}
+
 pfMap.minimap_indoor = minimap_indoor
 pfMap.minimap_zoom = minimap_zoom
 pfMap.minimap_sizes = minimap_sizes
 
-pfMap.tooltip = CreateFrame("Frame" , "pfMapTooltip", GameTooltip)
+pfMap.tooltip = CreateFrame("Frame", "pfMapTooltip", GameTooltip)
 pfMap.tooltip:SetScript("OnShow", function()
   local focus = GetMouseFocus()
   -- abort on pfQuest nodes
-  if focus and focus.title then return end
+  if focus and focus.title then
+    return
+  end
   -- abort on quest timers
-  if focus and focus.GetName and strsub((focus:GetName() or ""),0,10) == "QuestTimer" then return end
+  if focus and focus.GetName and strsub((focus:GetName() or ""), 0, 10) == "QuestTimer" then
+    return
+  end
   -- abort if tooltips are disabled
-  if pfQuest_config.showtooltips == "0" then return end
+  if pfQuest_config.showtooltips == "0" then
+    return
+  end
 
   local name = getglobal("GameTooltipTextLeft1") and getglobal("GameTooltipTextLeft1"):GetText() or "__NONE__"
   local zone = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
@@ -246,9 +306,9 @@ function pfMap.tooltip:GetColor(min, max)
     r1, g1, b1 = 1, 1, 0
     r2, g2, b2 = 0, 1, 0
   end
-  r = r1 + (r2 - r1)*perc
-  g = g1 + (g2 - g1)*perc
-  b = b1 + (b2 - b1)*perc
+  r = r1 + (r2 - r1) * perc
+  g = g1 + (g2 - g1) * perc
+  b = b1 + (b2 - b1) * perc
 
   return r, g, b
 end
@@ -258,7 +318,7 @@ function pfMap:HexDifficultyColor(level, force)
     return "|cffff5555"
   else
     local c = pfQuestCompat.GetDifficultyColor(level)
-    return string.format("|cff%02x%02x%02x", c.r*255, c.g*255, c.b*255)
+    return string.format("|cff%02x%02x%02x", c.r * 255, c.g * 255, c.b * 255)
   end
 end
 
@@ -270,7 +330,7 @@ function pfMap:ShowTooltip(meta, tooltip)
   -- add quest data
   if meta["quest"] then
     -- scan all quest entries for matches
-    for qid=1, GetNumQuestLogEntries() do
+    for qid = 1, GetNumQuestLogEntries() do
       local qtitle, _, _, _, _, complete = compat.GetQuestLogTitle(qid)
 
       if meta["quest"] == qtitle then
@@ -278,19 +338,21 @@ function pfMap:ShowTooltip(meta, tooltip)
         local objectives = GetNumQuestLeaderBoards(qid)
         catch = true
 
-        local symbol = ( complete or objectives == 0 ) and "|cff555555[|cffffcc00?|cff555555]|r " or "|cff555555[|cffffcc00!|cff555555]|r "
+        local symbol = (complete or objectives == 0) and "|cff555555[|cffffcc00?|cff555555]|r "
+          or "|cff555555[|cffffcc00!|cff555555]|r "
         tooltip:AddLine(symbol .. meta["quest"], 1, 1, 0)
 
         if objectives then
-          for i=1, objectives, 1 do
+          for i = 1, objectives, 1 do
             local text, type, finished = GetQuestLogLeaderBoard(i, qid)
 
             if type == "monster" then
               -- kill
-              local i, j, monsterName, objNum, objNeeded = strfind(text, pfUI.api.SanitizePattern(QUEST_MONSTERS_KILLED))
+              local i, j, monsterName, objNum, objNeeded =
+                strfind(text, pfUI.api.SanitizePattern(QUEST_MONSTERS_KILLED))
               if monsterName and meta["spawn"] == monsterName then
                 catch_obj = true
-                local r,g,b = pfMap.tooltip:GetColor(objNum, objNeeded)
+                local r, g, b = pfMap.tooltip:GetColor(objNum, objNeeded)
                 tooltip:AddLine("|cffaaaaaa- |r" .. monsterName .. ": " .. objNum .. "/" .. objNeeded, r, g, b)
               end
             elseif table.getn(meta["item"]) > 0 and type == "item" and meta["droprate"] then
@@ -300,10 +362,24 @@ function pfMap:ShowTooltip(meta, tooltip)
               for mid, item in pairs(meta["item"]) do
                 if item == itemName then
                   catch_obj = true
-                  local r,g,b = pfMap.tooltip:GetColor(objNum, objNeeded)
-                  local dr,dg,db = pfMap.tooltip:GetColor(tonumber(meta["droprate"]), 100)
-                  local lootcolor = string.format("%02x%02x%02x", dr * 255,dg * 255, db * 255)
-                  tooltip:AddLine("|cffaaaaaa- |r" .. itemName .. ": " .. objNum .. "/" .. objNeeded .. " |cff555555[|cff" .. lootcolor .. meta["droprate"] .. "%|cff555555]", r, g, b)
+                  local r, g, b = pfMap.tooltip:GetColor(objNum, objNeeded)
+                  local dr, dg, db = pfMap.tooltip:GetColor(tonumber(meta["droprate"]), 100)
+                  local lootcolor = string.format("%02x%02x%02x", dr * 255, dg * 255, db * 255)
+                  tooltip:AddLine(
+                    "|cffaaaaaa- |r"
+                      .. itemName
+                      .. ": "
+                      .. objNum
+                      .. "/"
+                      .. objNeeded
+                      .. " |cff555555[|cff"
+                      .. lootcolor
+                      .. meta["droprate"]
+                      .. "%|cff555555]",
+                    r,
+                    g,
+                    b
+                  )
                 end
               end
             elseif table.getn(meta["item"]) > 0 and type == "item" and meta["sellcount"] then
@@ -313,9 +389,24 @@ function pfMap:ShowTooltip(meta, tooltip)
               for mid, item in pairs(meta["item"]) do
                 if item == itemName then
                   catch_obj = true
-                  local r,g,b = pfMap.tooltip:GetColor(objNum, objNeeded)
-                  local sellcount = tonumber(meta["sellcount"]) > 0 and " |cff555555[|cffcccccc" .. meta["sellcount"] .. "x" .. "|cff555555]" or ""
-                  tooltip:AddLine("|cffaaaaaa- |r" .. pfQuest_Loc["Buy"] .. ": " .. itemName .. ": " .. objNum .. "/" .. objNeeded .. sellcount, r, g, b)
+                  local r, g, b = pfMap.tooltip:GetColor(objNum, objNeeded)
+                  local sellcount = tonumber(meta["sellcount"]) > 0
+                      and " |cff555555[|cffcccccc" .. meta["sellcount"] .. "x" .. "|cff555555]"
+                    or ""
+                  tooltip:AddLine(
+                    "|cffaaaaaa- |r"
+                      .. pfQuest_Loc["Buy"]
+                      .. ": "
+                      .. itemName
+                      .. ": "
+                      .. objNum
+                      .. "/"
+                      .. objNeeded
+                      .. sellcount,
+                    r,
+                    g,
+                    b
+                  )
                 end
               end
             end
@@ -325,7 +416,7 @@ function pfMap:ShowTooltip(meta, tooltip)
     end
 
     if not catch then
-      tooltip:AddLine("|cff555555[|cffffcc00!|cff555555]|r " .. meta["quest"], 1, 1, .7)
+      tooltip:AddLine("|cff555555[|cffffcc00!|cff555555]|r " .. meta["quest"], 1, 1, 0.7)
     end
 
     if not catch_obj then
@@ -337,33 +428,48 @@ function pfMap:ShowTooltip(meta, tooltip)
           catchFallback = true
           local dr, dg, db = pfMap.tooltip:GetColor(tonumber(meta["droprate"]), 100)
           local lootcolor = string.format("%02x%02x%02x", dr * 255, dg * 255, db * 255)
-          tooltip:AddLine("|cffaaaaaa- |r" .. item .. " |cff555555[|cff" .. lootcolor .. meta["droprate"] .. "%|cff555555]", .7, .7, .7)
+          tooltip:AddLine(
+            "|cffaaaaaa- |r" .. item .. " |cff555555[|cff" .. lootcolor .. meta["droprate"] .. "%|cff555555]",
+            0.7,
+            0.7,
+            0.7
+          )
         end
       end
 
       if meta["item"] and meta["item"][1] and meta["sellcount"] then
         for mid, item in pairs(meta["item"]) do
           catchFallback = true
-          local sellcount = tonumber(meta["sellcount"]) > 0 and " |cff555555[|cffcccccc" .. meta["sellcount"] .. "x" .. "|cff555555]" or ""
-          tooltip:AddLine("|cffaaaaaa- |r" .. pfQuest_Loc["Buy"] .. ": " .. item .. sellcount, .7, .7, .7)
+          local sellcount = tonumber(meta["sellcount"]) > 0
+              and " |cff555555[|cffcccccc" .. meta["sellcount"] .. "x" .. "|cff555555]"
+            or ""
+          tooltip:AddLine("|cffaaaaaa- |r" .. pfQuest_Loc["Buy"] .. ": " .. item .. sellcount, 0.7, 0.7, 0.7)
         end
       end
 
       if not catchFallback and meta["spawn"] and not meta["texture"] then
         catchFallback = true
-        tooltip:AddLine("|cffaaaaaa- |r" .. (meta["spawntype"] and meta["spawntype"] == "Trigger" and pfQuest_Loc["Explore"] or meta["spawn"]), .7,.7,.7)
+        tooltip:AddLine(
+          "|cffaaaaaa- |r"
+            .. (meta["spawntype"] and meta["spawntype"] == "Trigger" and pfQuest_Loc["Explore"] or meta["spawn"]),
+          0.7,
+          0.7,
+          0.7
+        )
       end
 
       if not catchFallback and meta["texture"] and meta["qlvl"] then
         local texts = meta["questid"] and pfDB["quests"]["loc"][meta["questid"]] or nil
 
         if texts and texts["O"] and texts["O"] ~= "" then
-          tooltip:AddLine(pfDatabase:FormatQuestText(texts["O"]),1,1,.9,true)
+          tooltip:AddLine(pfDatabase:FormatQuestText(texts["O"]), 1, 1, 0.9, true)
         end
 
         local qlvlstr = pfQuest_Loc["Level"] .. ": " .. pfMap:HexDifficultyColor(meta["qlvl"]) .. meta["qlvl"] .. "|r"
-        local qminstr = meta["qmin"] and " / " .. pfQuest_Loc["Required"] .. ": " .. pfMap:HexDifficultyColor(meta["qmin"], true) .. meta["qmin"] .. "|r"  or ""
-        tooltip:AddLine("|cffaaaaaa- |r" .. qlvlstr .. qminstr , .8,.8,.8)
+        local qminstr = meta["qmin"]
+            and " / " .. pfQuest_Loc["Required"] .. ": " .. pfMap:HexDifficultyColor(meta["qmin"], true) .. meta["qmin"] .. "|r"
+          or ""
+        tooltip:AddLine("|cffaaaaaa- |r" .. qlvlstr .. qminstr, 0.8, 0.8, 0.8)
       end
     end
   else
@@ -371,23 +477,34 @@ function pfMap:ShowTooltip(meta, tooltip)
     if meta["item"][1] and meta["itemid"] and not meta["itemlink"] then
       local _, _, itemQuality = GetItemInfo(meta["itemid"])
       if itemQuality then
-        local itemColor = "|c" .. string.format("%02x%02x%02x%02x", 255,
+        local itemColor = "|c"
+          .. string.format(
+            "%02x%02x%02x%02x",
+            255,
             ITEM_QUALITY_COLORS[itemQuality].r * 255,
             ITEM_QUALITY_COLORS[itemQuality].g * 255,
-            ITEM_QUALITY_COLORS[itemQuality].b * 255)
+            ITEM_QUALITY_COLORS[itemQuality].b * 255
+          )
 
-        meta["itemlink"] = itemColor .."|Hitem:".. meta["itemid"] ..":0:0:0|h[".. meta["item"][1] .."]|h|r"
+        meta["itemlink"] = itemColor .. "|Hitem:" .. meta["itemid"] .. ":0:0:0|h[" .. meta["item"][1] .. "]|h|r"
       end
     end
 
     if meta["sellcount"] then
       local item = meta["itemlink"] or "[" .. meta["item"][1] .. "]"
-      local sellcount = tonumber(meta["sellcount"]) > 0 and " |cff555555[|cffcccccc" .. meta["sellcount"] .. "x" .. "|cff555555]" or ""
-      tooltip:AddLine(pfQuest_Loc["Vendor"] .. ": " .. item .. sellcount, 1,1,1)
+      local sellcount = tonumber(meta["sellcount"]) > 0
+          and " |cff555555[|cffcccccc" .. meta["sellcount"] .. "x" .. "|cff555555]"
+        or ""
+      tooltip:AddLine(pfQuest_Loc["Vendor"] .. ": " .. item .. sellcount, 1, 1, 1)
     elseif meta["item"][1] then
       local item = meta["itemlink"] or "[" .. meta["item"][1] .. "]"
-      local r,g,b = pfMap.tooltip:GetColor(tonumber(meta["droprate"]), 100)
-      tooltip:AddLine("|cffffffff" .. pfQuest_Loc["Loot"] .. ": " .. item ..  " |cff555555[|r" .. meta["droprate"] .. "%|cff555555]", r,g,b)
+      local r, g, b = pfMap.tooltip:GetColor(tonumber(meta["droprate"]), 100)
+      tooltip:AddLine(
+        "|cffffffff" .. pfQuest_Loc["Loot"] .. ": " .. item .. " |cff555555[|r" .. meta["droprate"] .. "%|cff555555]",
+        r,
+        g,
+        b
+      )
     end
   end
 
@@ -430,8 +547,8 @@ end
 function pfMap:SetMapByID(id)
   local search = pfDB["zones"]["loc"][id]
 
-  for cid, cname in pairs({GetMapContinents()}) do
-    for mid, mname in pairs({GetMapZones(cid)}) do
+  for cid, cname in pairs({ GetMapContinents() }) do
+    for mid, mname in pairs({ GetMapZones(cid) }) do
       if mname == search then
         SetMapZoom(cid, mid)
         return
@@ -444,7 +561,7 @@ local customids = {
   ["AlteracValley"] = 2597,
 }
 
-local map_zone_cache = { }
+local map_zone_cache = {}
 function pfMap:GetMapID(cid, mid)
   cid = cid or GetCurrentMapContinent()
   mid = mid or GetCurrentMapZone()
@@ -465,11 +582,21 @@ function pfMap:GetMapID(cid, mid)
 end
 
 function pfMap:AddNode(meta)
-  if not meta then return end
-  if not meta["zone"] then return end
-  if not meta["title"] then return end
+  if not meta then
+    return
+  end
+  if not meta["zone"] then
+    return
+  end
+  if not meta["title"] then
+    return
+  end
 
-  meta["description"] = pfDatabase:BuildQuestDescription(meta)
+  -- only compute description if the caller hasn't already done it
+  -- (SearchMobID / SearchObjectID hoist this call outside their coord loops)
+  if meta["description"] == nil then
+    meta["description"] = pfDatabase:BuildQuestDescription(meta)
+  end
 
   local addon = meta["addon"] or "PFDB"
   local map = meta["zone"]
@@ -479,24 +606,40 @@ function pfMap:AddNode(meta)
   local spawn = meta["spawn"]
   local item = meta["item"]
 
-  local sindex = string.format("%s:%s:%s:%s:%s:%s",
-    (addon or ""), (map or ""), (coords or ""), (title or ""), (layer or ""), (spawn or ""), (item or ""))
+  local sindex = string.format(
+    "%s:%s:%s:%s:%s:%s",
+    (addon or ""),
+    (map or ""),
+    (coords or ""),
+    (title or ""),
+    (layer or ""),
+    (spawn or ""),
+    (item or "")
+  )
 
   -- use prioritized clusters
   if layer >= 9 and meta["priority"] then
     layer = layer + (10 - min(meta["priority"], 10))
   end
 
-  if not pfMap.nodes[addon] then pfMap.nodes[addon] = {} end
-  if not pfMap.nodes[addon][map] then pfMap.nodes[addon][map] = {} end
-  if not pfMap.nodes[addon][map][coords] then pfMap.nodes[addon][map][coords] = {} end
+  if not pfMap.nodes[addon] then
+    pfMap.nodes[addon] = {}
+  end
+  if not pfMap.nodes[addon][map] then
+    pfMap.nodes[addon][map] = {}
+  end
+  if not pfMap.nodes[addon][map][coords] then
+    pfMap.nodes[addon][map][coords] = {}
+  end
 
   -- skip early on existing nodes
   if pfMap.nodes[addon][map][coords][title] then
     if item and table.getn(pfMap.nodes[addon][map][coords][title].item) > 0 then
       -- check if item already exists
       for id, name in pairs(pfMap.nodes[addon][map][coords][title].item) do
-        if name == item then return end
+        if name == item then
+          return
+        end
       end
 
       -- add new item and exit
@@ -504,8 +647,12 @@ function pfMap:AddNode(meta)
       return
     end
 
-    if pfMap.nodes[addon][map][coords][title] and pfMap.nodes[addon][map][coords][title].layer and layer and
-     pfMap.nodes[addon][map][coords][title].layer >= layer then
+    if
+      pfMap.nodes[addon][map][coords][title]
+      and pfMap.nodes[addon][map][coords][title].layer
+      and layer
+      and pfMap.nodes[addon][map][coords][title].layer >= layer
+    then
       -- identical node already exists, exit here
       return
     end
@@ -514,12 +661,30 @@ function pfMap:AddNode(meta)
   -- create new combined data node from given meta data
   if not similar_nodes[sindex] then
     similar_nodes[sindex] = {}
-    for key, val in pairs(meta) do similar_nodes[sindex][key] = val end
+    for key, val in pairs(meta) do
+      similar_nodes[sindex][key] = val
+    end
     similar_nodes[sindex].item = { [1] = item }
   end
 
   -- set current node to combined node
   pfMap.nodes[addon][map][coords][title] = similar_nodes[sindex]
+
+  -- mark this coord's node table dirty so UpdateNodes knows to reprocess it
+  pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
+  pfMap.dirtyMaps[map] = true
+
+  -- maintain reverse title index for O(1) DeleteNode
+  if not pfMap.titleIndex[addon] then
+    pfMap.titleIndex[addon] = {}
+  end
+  if not pfMap.titleIndex[addon][title] then
+    pfMap.titleIndex[addon][title] = {}
+  end
+  if not pfMap.titleIndex[addon][title][map] then
+    pfMap.titleIndex[addon][title][map] = {}
+  end
+  pfMap.titleIndex[addon][title][map][coords] = true
 
   -- add node to unified cluster cache
   if not meta["cluster"] and not meta["texture"] then
@@ -533,7 +698,9 @@ function pfMap:AddNode(meta)
     if not unifiedcache[title][map][node_index] then
       -- create new unified node from given meta data
       local unified_meta = {}
-      for key, val in pairs(meta) do unified_meta[key] = val end
+      for key, val in pairs(meta) do
+        unified_meta[key] = val
+      end
 
       -- save node to unified cache
       unifiedcache[title][map][node_index] = { meta = unified_meta, coords = {} }
@@ -548,6 +715,12 @@ function pfMap:AddNode(meta)
     pfMap.tooltips[spawn] = pfMap.tooltips[spawn] or {}
     pfMap.tooltips[spawn][title] = pfMap.tooltips[spawn][title] or {}
     pfMap.tooltips[spawn][title][map] = pfMap.tooltips[spawn][title][map] or similar_nodes[sindex]
+
+    -- maintain reverse tooltip index for O(1) DeleteNode
+    if not pfMap.tooltipIndex[title] then
+      pfMap.tooltipIndex[title] = {}
+    end
+    pfMap.tooltipIndex[title][spawn] = true
   end
 
   pfMap.queue_update = GetTime()
@@ -570,34 +743,67 @@ function pfMap:GetNodes(addon, title)
 end
 
 function pfMap:DeleteNode(addon, title)
-  -- remove tooltips
   if not addon then
+    -- wipe everything
     pfMap.tooltips = {}
-  else
-    for mk, mv in pairs(pfMap.tooltips) do
-      for tk, tv in pairs(mv) do
-        if ( title and tk == title ) or ( not title and tv.addon == addon ) then
-          pfMap.tooltips[mk][tk] = nil
+    pfMap.nodes = {}
+    pfMap.titleIndex = {}
+    pfMap.tooltipIndex = {}
+    pfMap.dirtyNodes = {}
+    pfMap.dirtyMaps = {}
+  elseif not title then
+    -- wipe all nodes for this addon; clean up both reverse indexes
+    if pfMap.titleIndex[addon] then
+      for t, maps in pairs(pfMap.titleIndex[addon]) do
+        -- clean tooltipIndex entries that belonged to this addon's titles
+        local spawns = pfMap.tooltipIndex[t]
+        if spawns then
+          for spawn in pairs(spawns) do
+            if pfMap.tooltips[spawn] then
+              pfMap.tooltips[spawn][t] = nil
+              if IsEmpty(pfMap.tooltips[spawn]) then
+                pfMap.tooltips[spawn] = nil
+              end
+            end
+          end
+          pfMap.tooltipIndex[t] = nil
         end
       end
+      pfMap.titleIndex[addon] = nil
     end
-  end
-
-  -- remove nodes
-  if not addon then
-    pfMap.nodes = {}
-  elseif not title then
-    pfMap.nodes[addon] = {}
-  elseif pfMap.nodes[addon] then
-    for map, foo in pairs(pfMap.nodes[addon]) do
-      for coords, node in pairs(pfMap.nodes[addon][map]) do
-        if pfMap.nodes[addon][map][coords][title] then
-          pfMap.nodes[addon][map][coords][title] = nil
-          if IsEmpty(pfMap.nodes[addon][map][coords]) then
-            pfMap.nodes[addon][map][coords] = nil
+    pfMap.nodes[addon] = nil
+  elseif pfMap.titleIndex[addon] and pfMap.titleIndex[addon][title] then
+    -- fast path: use reverse index to find exactly which (map, coords) to clear
+    for map, coords_set in pairs(pfMap.titleIndex[addon][title]) do
+      if pfMap.nodes[addon] and pfMap.nodes[addon][map] then
+        for coords in pairs(coords_set) do
+          if pfMap.nodes[addon][map][coords] then
+            pfMap.nodes[addon][map][coords][title] = nil
+            if IsEmpty(pfMap.nodes[addon][map][coords]) then
+              pfMap.nodes[addon][map][coords] = nil
+            else
+              -- coord survives with remaining titles; reprocess on next UpdateNodes
+              pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
+              pfMap.dirtyMaps[map] = true
+            end
           end
         end
       end
+    end
+    pfMap.titleIndex[addon][title] = nil
+
+    -- clean up tooltip entries for this title using the reverse tooltip index
+    local spawns = pfMap.tooltipIndex[title]
+    if spawns then
+      for spawn in pairs(spawns) do
+        if pfMap.tooltips[spawn] then
+          pfMap.tooltips[spawn][title] = nil
+          if IsEmpty(pfMap.tooltips[spawn]) then
+            pfMap.tooltips[spawn] = nil
+          end
+        end
+      end
+      pfMap.tooltipIndex[title] = nil
     end
   end
 
@@ -617,11 +823,15 @@ function pfMap:NodeClick()
     end
 
     pfQuest.updateQuestGivers = true
-  elseif this.texture and pfQuest.route and
-   (( pfQuest_config["routecluster"] == "1" and this.layer >= 9 ) or
-    ( pfQuest_config["routeender"] == "1" and this.layer == 4) or
-    ( pfQuest_config["routestarter"] == "1" and this.layer == 1) or
-    ( pfQuest_config["routestarter"] == "1" and this.layer == 2))
+  elseif
+    this.texture
+    and pfQuest.route
+    and (
+      (pfQuest_config["routecluster"] == "1" and this.layer >= 9)
+      or (pfQuest_config["routeender"] == "1" and this.layer == 4)
+      or (pfQuest_config["routestarter"] == "1" and this.layer == 1)
+      or (pfQuest_config["routestarter"] == "1" and this.layer == 2)
+    )
   then
     -- set as arrow target priority
     pfQuest.route.SetTarget((not pfQuest.route.IsTarget(this) and this))
@@ -642,10 +852,15 @@ function pfMap:NodeEnter()
   local tooltip = this:GetParent() == WorldMapButton and WorldMapTooltip or GameTooltip
   tooltip:SetOwner(this, "ANCHOR_LEFT")
   this.spawn = this.spawn or UNKNOWN
-  tooltip:SetText(this.spawn..(pfQuest_config.showids == "1" and " |cffcccccc("..this.spawnid..")|r" or ""), .3, 1, .8)
-  tooltip:AddDoubleLine(pfQuest_Loc["Level"] .. ":", (this.level or UNKNOWN), .8,.8,.8, 1,1,1)
-  tooltip:AddDoubleLine(pfQuest_Loc["Type"] .. ":", (this.spawntype or UNKNOWN), .8,.8,.8, 1,1,1)
-  tooltip:AddDoubleLine(pfQuest_Loc["Respawn"] .. ":", (this.respawn or UNKNOWN), .8,.8,.8, 1,1,1)
+  tooltip:SetText(
+    this.spawn .. (pfQuest_config.showids == "1" and " |cffcccccc(" .. this.spawnid .. ")|r" or ""),
+    0.3,
+    1,
+    0.8
+  )
+  tooltip:AddDoubleLine(pfQuest_Loc["Level"] .. ":", (this.level or UNKNOWN), 0.8, 0.8, 0.8, 1, 1, 1)
+  tooltip:AddDoubleLine(pfQuest_Loc["Type"] .. ":", (this.spawntype or UNKNOWN), 0.8, 0.8, 0.8, 1, 1, 1)
+  tooltip:AddDoubleLine(pfQuest_Loc["Respawn"] .. ":", (this.respawn or UNKNOWN), 0.8, 0.8, 0.8, 1, 1, 1)
 
   for title, meta in pairs(this.node) do
     pfMap:ShowTooltip(meta, tooltip)
@@ -666,7 +881,7 @@ function pfMap:NodeEnter()
     end
 
     -- update tooltip and sizes
-    tooltip:AddLine(text, .6, .6, .6)
+    tooltip:AddLine(text, 0.6, 0.6, 0.6)
     tooltip:Show()
   end
 
@@ -711,7 +926,7 @@ function pfMap:BuildNode(name, parent)
   f.pic:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -1, 1)
 
   f.hl = f:CreateTexture(nil, "BORDER")
-  f.hl:SetTexture(pfQuestConfig.path.."\\img\\track")
+  f.hl:SetTexture(pfQuestConfig.path .. "\\img\\track")
   f.hl:SetPoint("TOPLEFT", f, "TOPLEFT", -5, 5)
   f.hl:SetWidth(12)
   f.hl:SetHeight(12)
@@ -722,7 +937,7 @@ pfMap.highlightdb = {}
 function pfMap:UpdateNode(frame, node, color, obj, distance)
   -- clear node to title association table
   if pfMap.highlightdb[frame] then
-    for k,v in pairs(pfMap.highlightdb[frame]) do
+    for k, v in pairs(pfMap.highlightdb[frame]) do
       pfMap.highlightdb[frame][k] = nil
     end
   else
@@ -739,37 +954,37 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
 
     -- use prioritized clusters
     if tab.cluster and tab.priority then
-      tab.layer = tab.layer + (10 - min(tab.priority , 10))
+      tab.layer = tab.layer + (10 - min(tab.priority, 10))
     end
 
-    if tab.spawn and ( tab.layer > frame.layer or not frame.spawn ) then
+    if tab.spawn and (tab.layer > frame.layer or not frame.spawn) then
       frame.updateTexture = (frame.texture ~= tab.texture)
-      frame.updateVertex = (frame.vertex ~= tab.vertex )
+      frame.updateVertex = (frame.vertex ~= tab.vertex)
       frame.updateColor = (frame.color ~= tab.color)
       frame.updateLayer = (frame.layer ~= tab.layer)
 
       -- set title and texture to the entry with highest layer
       -- and add core information
-      frame.layer       = tab.layer
-      frame.spawn       = tab.spawn
-      frame.spawnid     = tab.spawnid
-      frame.spawntype   = tab.spawntype
-      frame.respawn     = tab.respawn
-      frame.level       = tab.level
-      frame.questid     = tab.questid
-      frame.texture     = tab.texture
-      frame.vertex      = tab.vertex
-      frame.title       = title
-      frame.func        = tab.func
-      frame.cluster     = tab.cluster
+      frame.layer = tab.layer
+      frame.spawn = tab.spawn
+      frame.spawnid = tab.spawnid
+      frame.spawntype = tab.spawntype
+      frame.respawn = tab.respawn
+      frame.level = tab.level
+      frame.questid = tab.questid
+      frame.texture = tab.texture
+      frame.vertex = tab.vertex
+      frame.title = title
+      frame.func = tab.func
+      frame.cluster = tab.cluster
       frame.description = tab.description
-      frame.priority    = tab.priority
-      frame.quest       = tab.quest
-      frame.qlvl        = tab.qlvl
-      frame.itemreq     = tab.itemreq
-      frame.arrow       = tab.arrow
-      frame.icon        = tab.icon
-      frame.fade_range  = tab.fade_range
+      frame.priority = tab.priority
+      frame.quest = tab.quest
+      frame.qlvl = tab.qlvl
+      frame.itemreq = tab.itemreq
+      frame.arrow = tab.arrow
+      frame.icon = tab.icon
+      frame.fade_range = tab.fade_range
 
       if pfQuest_config["spawncolors"] == "1" then
         frame.color = tab.spawn or tab.title
@@ -779,9 +994,9 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
     end
   end
 
-  if ( frame.updateTexture or frame.updateVertex or not frame.tex:GetTexture() ) and frame.texture then
+  if (frame.updateTexture or frame.updateVertex or not frame.tex:GetTexture()) and frame.texture then
     frame.tex:SetTexture(frame.texture)
-    frame.tex:SetVertexColor(1,1,1)
+    frame.tex:SetVertexColor(1, 1, 1)
     frame.pic:Hide()
 
     if frame.updateVertex and frame.vertex then
@@ -792,7 +1007,7 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
     end
   end
 
-  if ( frame.updateColor or frame.updateTexture or not frame.tex:GetTexture() ) and not frame.texture then
+  if (frame.updateColor or frame.updateTexture or not frame.tex:GetTexture()) and not frame.texture then
     local r, g, b = str2rgb(frame.color)
 
     if (frame.title and pfQuest.icons[frame.title]) or frame.icon then
@@ -801,10 +1016,10 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
       frame.pic:Show()
 
       if obj == "minimap" then
-        local halfsize = pfMap.drawlayer:GetWidth()/2
+        local halfsize = pfMap.drawlayer:GetWidth() / 2
         local fade_range = frame.fade_range or 8
-        local fade_in = halfsize/100*(fade_range-4)
-        local fade_out = halfsize/100*(fade_range+4)
+        local fade_in = halfsize / 100 * (fade_range - 4)
+        local fade_out = halfsize / 100 * (fade_range + 4)
         local alpha = ((distance or fade_out) - fade_in) / (fade_out - fade_in)
         alpha = math.max(alpha, 0)
         alpha = math.min(alpha, 1)
@@ -815,14 +1030,14 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
     end
 
     if obj == "minimap" and pfQuest_config["cutoutminimap"] == "1" then
-      frame.tex:SetTexture(pfQuestConfig.path.."\\img\\nodecut")
-      frame.tex:SetVertexColor(r,g,b,1)
+      frame.tex:SetTexture(TEX_NODECUT)
+      frame.tex:SetVertexColor(r, g, b, 1)
     elseif obj ~= "minimap" and pfQuest_config["cutoutworldmap"] == "1" then
-      frame.tex:SetTexture(pfQuestConfig.path.."\\img\\nodecut")
-      frame.tex:SetVertexColor(r,g,b,1)
+      frame.tex:SetTexture(TEX_NODECUT)
+      frame.tex:SetVertexColor(r, g, b, 1)
     else
-      frame.tex:SetTexture(pfQuestConfig.path.."\\img\\node")
-      frame.tex:SetVertexColor(r,g,b,1)
+      frame.tex:SetTexture(TEX_NODE)
+      frame.tex:SetVertexColor(r, g, b, 1)
     end
   end
 
@@ -841,7 +1056,11 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
   frame.defsize = (frame.cluster or frame.layer == 4) and 18 or 14
 
   -- make the current route target visible
-  if target then frame.hl:Show() else frame.hl:Hide() end
+  if target then
+    frame.hl:Show()
+  else
+    frame.hl:Hide()
+  end
 
   -- reset frame size except for highlights
   if not highlight then
@@ -865,7 +1084,24 @@ function pfMap:UpdateNodes()
   -- reset route
   pfQuest.route:Reset()
 
+  -- Continent and world views do not resolve to a zone map ID. Extensions can
+  -- render their own pins there, but the core zone-node renderer must not use
+  -- nil as a dirty-map key.
+  if not map then
+    for _, pin in pairs(pfMap.pins) do
+      pin:Hide()
+    end
+    pfMap.lastUpdateZone = nil
+    pfMap.mapJustOpened = nil
+    return
+  end
+
   -- refresh all nodes
+  local n_pins, n_skipped = 0, 0
+  -- hoist map dimensions: same for every pin this call, and if the map
+  -- is resized between calls the new values will invalidate cached px/py.
+  local mapW = WorldMapButton:GetWidth()
+  local mapH = WorldMapButton:GetHeight()
   for addon, _ in pairs(pfMap.nodes) do
     if pfMap.nodes[addon][map] then
       for coords, node in pairs(pfMap.nodes[addon][map]) do
@@ -873,17 +1109,34 @@ function pfMap:UpdateNodes()
           pfMap.pins[i] = pfMap:BuildNode("pfMapPin" .. i, WorldMapButton)
         end
 
-        pfMap:UpdateNode(pfMap.pins[i], node, color)
+        -- skip UpdateNode if this pin is already bound to this exact node table
+        -- and nothing has been added/removed from it since the last UpdateNodes call.
+        -- pfMap.dirtyNodes[node] is set by AddNode/DeleteNode on any real write.
+        -- frame.node ~= node catches coord-slot shifts from insertions/removals.
+        if pfMap.pins[i].node ~= node or pfMap.dirtyNodes[node] then
+          pfMap:UpdateNode(pfMap.pins[i], node, color)
+          pfMap.dirtyNodes[node] = nil
+        else
+          n_skipped = n_skipped + 1
+        end
 
-        -- set position
-        local _, _, x, y = strfind(coords, "(.*)|(.*)")
+        -- set position (use cached coord parse to avoid strfind alloc)
+        local x, y
+        if coord_cache[coords] then
+          x, y = coord_cache[coords][1], coord_cache[coords][2]
+        else
+          local _, _, strx, stry = strfind(coords, "(.*)|(.*)")
+          x, y = strx + 0, stry + 0
+          coord_cache[coords] = { x, y }
+        end
 
         -- write points to the route plan
-        if ( pfQuest_config["routecluster"] == "1" and pfMap.pins[i].layer >= 9 ) or
-          ( pfQuest_config["routeender"] == "1" and pfMap.pins[i].layer == 4) or
-          ( pfQuest_config["routestarter"] == "1" and pfMap.pins[i].layer == 1 and pfMap.pins[i].texture) or
-          ( pfQuest_config["routestarter"] == "1" and pfMap.pins[i].layer == 2) or
-          pfMap.pins[i].arrow == true
+        if
+          (pfQuest_config["routecluster"] == "1" and pfMap.pins[i].layer >= 9)
+          or (pfQuest_config["routeender"] == "1" and pfMap.pins[i].layer == 4)
+          or (pfQuest_config["routestarter"] == "1" and pfMap.pins[i].layer == 1 and pfMap.pins[i].texture)
+          or (pfQuest_config["routestarter"] == "1" and pfMap.pins[i].layer == 2)
+          or pfMap.pins[i].arrow == true
         then
           pfQuest.route:AddPoint({ x, y, pfMap.pins[i] })
         end
@@ -900,27 +1153,49 @@ function pfMap:UpdateNodes()
             pfQuest.tracker.ButtonAdd(title, node)
           end
 
-          x = x / 100 * WorldMapButton:GetWidth()
-          y = y / 100 * WorldMapButton:GetHeight()
+          local px = x / 100 * mapW
+          local py = y / 100 * mapH
 
-          pfMap.pins[i]:ClearAllPoints()
-          pfMap.pins[i]:SetPoint("CENTER", WorldMapButton, "TOPLEFT", x, -y)
+          -- skip layout calls when the pin hasn't moved; ClearAllPoints +
+          -- SetPoint are the dominant cost in UpdateNodes for large pin counts
+          if pfMap.pins[i].lastX ~= px or pfMap.pins[i].lastY ~= py then
+            pfMap.pins[i].lastX = px
+            pfMap.pins[i].lastY = py
+            pfMap.pins[i]:ClearAllPoints()
+            pfMap.pins[i]:SetPoint("CENTER", WorldMapButton, "TOPLEFT", px, -py)
+          end
 
           pfMap.pins[i]:Show()
         end
 
+        n_pins = n_pins + 1
         i = i + 1
       end
     end
   end
+  pfQuest:Debug(format("UpdateNodes pins=%d skipped=%d", n_pins, n_skipped))
 
   -- hide remaining pins
-  for j=i, table.getn(pfMap.pins) do
-    if pfMap.pins[j] then pfMap.pins[j]:Hide() end
+  for j = i, table.getn(pfMap.pins) do
+    if pfMap.pins[j] then
+      pfMap.pins[j]:Hide()
+      pfMap.pins[j].lastX = nil
+      pfMap.pins[j].lastY = nil
+    end
   end
+
+  -- Perform tracker layout once after all ButtonAdd calls complete
+  if pfQuest.tracker and pfQuest.tracker.DoLayout then
+    pfQuest.tracker.DoLayout()
+  end
+
+  -- record which zone was rendered so WORLD_MAP_UPDATE can skip no-op opens
+  pfMap.lastUpdateZone = map
+  pfMap.dirtyMaps[map] = nil
+  -- map has fully rendered; subsequent zone changes are deliberate user actions
+  pfMap.mapJustOpened = nil
 end
 
-local coord_cache = {}
 function pfMap:UpdateMinimap()
   -- check for disabled minimap nodes
   if pfQuest_config["minimapnodes"] == "0" then
@@ -941,7 +1216,9 @@ function pfMap:UpdateMinimap()
   -- hide nodes and skip further processing in dungeons
   local xPlayer, yPlayer = GetPlayerMapPosition("player")
   if xPlayer == 0 and yPlayer == 0 then
-    for pins, pin in pairs(pfMap.mpins) do pin:Hide() end
+    for pins, pin in pairs(pfMap.mpins) do
+      pin:Hide()
+    end
     return
   end
 
@@ -950,7 +1227,11 @@ function pfMap:UpdateMinimap()
 
   -- force refresh every second even without changed values, otherwise skip
   if this.xPlayer == xPlayer and this.yPlayer == yPlayer and this.mZoom == mZoom then
-    if ( this.tick or 1) > GetTime() then return else this.tick = GetTime() + 1 end
+    if (this.tick or 1) > GetTime() then
+      return
+    else
+      this.tick = GetTime() + 1
+    end
   end
 
   this.xPlayer, this.yPlayer, this.mZoom = xPlayer, yPlayer, mZoom
@@ -982,8 +1263,8 @@ function pfMap:UpdateMinimap()
           coord_cache[coords] = { x, y }
         end
 
-        local xPos = ( x - xPlayer) * xDraw
-        local yPos = ( y - yPlayer) * yDraw
+        local xPos = (x - xPlayer) * xDraw
+        local yPos = (y - yPlayer) * yDraw
 
         if pfQuestCompat.rotateMinimap then
           -- TODO: this part is broken and does not work yet.
@@ -999,9 +1280,11 @@ function pfMap:UpdateMinimap()
         local distance = sqrt(xPos * xPos + yPos * yPos)
 
         if pfUI.minimap then
-          display = ( abs(xPos) + 8 < pfMap.drawlayer:GetWidth() / 2 and abs(yPos) + 8 < pfMap.drawlayer:GetHeight()/2 ) and true or nil
+          display = (abs(xPos) + 8 < pfMap.drawlayer:GetWidth() / 2 and abs(yPos) + 8 < pfMap.drawlayer:GetHeight() / 2)
+              and true
+            or nil
         else
-          display = ( distance + 8 < pfMap.drawlayer:GetWidth() / 2 ) and true or nil
+          display = (distance + 8 < pfMap.drawlayer:GetWidth() / 2) and true or nil
         end
 
         if display then
@@ -1009,7 +1292,13 @@ function pfMap:UpdateMinimap()
             pfMap.mpins[i] = pfMap:BuildNode(nodename .. i, pfMap.drawlayer)
           end
 
-          pfMap:UpdateNode(pfMap.mpins[i], node, color, "minimap", distance)
+          -- skip expensive UpdateNode work (highlightdb rebuild, node iteration,
+          -- size calls) when this pin is already showing the correct node and
+          -- nothing has been added or removed from it since the last render.
+          if pfMap.mpins[i].node ~= node or pfMap.dirtyNodes[node] then
+            pfMap:UpdateNode(pfMap.mpins[i], node, color, "minimap", distance)
+            pfMap.dirtyNodes[node] = nil
+          end
 
           pfMap.mpins[i].hl:Hide()
 
@@ -1030,12 +1319,14 @@ function pfMap:UpdateMinimap()
   end
 
   -- hide remaining pins
-  for j=i, table.getn(pfMap.mpins) do
-    if pfMap.mpins[j] then pfMap.mpins[j]:Hide() end
+  for j = i, table.getn(pfMap.mpins) do
+    if pfMap.mpins[j] then
+      pfMap.mpins[j]:Hide()
+    end
   end
 end
 
-local zone, last_zone
+local zone
 pfMap:RegisterEvent("ZONE_CHANGED")
 pfMap:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 pfMap:RegisterEvent("MINIMAP_ZONE_CHANGED")
@@ -1051,10 +1342,35 @@ pfMap:SetScript("OnEvent", function()
     end
   end
 
-  -- update nodes on world map changes
-  if event == "WORLD_MAP_UPDATE" and last_zone ~= zone then
-    pfMap.UpdateNodes()
-    last_zone = zone
+  -- update nodes on world map changes.
+  -- Three distinct cases:
+  -- (1) Map just opened (burst of ~100 events while frame renders): use the
+  --     debounce to coalesce them into one call once rendering settles.
+  -- (2) Zone changed by user (deliberate click): call UpdateNodes immediately.
+  -- (3) Continent view (newzone == nil): hide all pins immediately.
+  -- (4) Same zone, dirty nodes: stamp debounce.
+  if event == "WORLD_MAP_UPDATE" then
+    local newzone = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+
+    if newzone == nil then
+      -- continent view: hide all worldmap pins immediately
+      for j = 1, table.getn(pfMap.pins) do
+        if pfMap.pins[j] then
+          pfMap.pins[j]:Hide()
+        end
+      end
+      pfMap.lastUpdateZone = nil
+    elseif pfMap.mapJustOpened then
+      -- map just opened: debounce the burst, clear flag once settled
+      pfMap.queue_update = GetTime()
+    elseif newzone ~= pfMap.lastUpdateZone then
+      -- deliberate zone change: update immediately, no debounce
+      pfMap.queue_update = nil
+      pfMap:UpdateNodes()
+    elseif pfMap.dirtyMaps[newzone] then
+      -- same zone, pending writes: coalesce via debounce
+      pfMap.queue_update = GetTime()
+    end
   end
 end)
 
@@ -1063,7 +1379,7 @@ pfMap:SetScript("OnUpdate", function()
   -- handle highlights and animations
   if pfMap.queue_update or transition or pfMap.highlight ~= hlstate or shiftstate ~= hidecluster then
     hlstate, shiftstate, transition = pfMap.highlight, hidecluster, nil
-    fps = math.max(.2, GetFramerate() / 30)
+    fps = math.max(0.2, GetFramerate() / 30)
 
     for frame, data in pairs(pfMap.highlightdb) do
       local highlight = pfMap.highlightdb[frame][pfMap.highlight] and true or nil
@@ -1088,16 +1404,35 @@ pfMap:SetScript("OnUpdate", function()
   end
 
   -- limit all map updates to once per .05 seconds
-  if ( this.throttle or .2) > GetTime() then return else this.throttle = GetTime() + .05 end
+  if (this.throttle or 0.2) > GetTime() then
+    return
+  else
+    this.throttle = GetTime() + 0.05
+  end
 
   -- process node updates if required
-  if pfMap.queue_update and pfMap.queue_update + .25 < GetTime() then
-    pfMap.queue_update = nil
-    pfMap:UpdateNodes()
+  if pfMap.queue_update and pfMap.queue_update + 0.25 < GetTime() then
+    -- don't fire while the quest system still has work pending: each queue entry
+    -- and SearchQuests/UpdateQuestlog call will push queue_update to a newer time,
+    -- so the debounce will settle naturally once the whole batch is done.
+    -- This prevents UpdateNodes from firing between queue entries when a prior
+    -- queue_update stamp happens to be 0.25s old mid-drain.
+    local questBusy = pfQuest and ((pfQuest.queueCount or 0) > 0 or pfQuest.updateQuestGivers or pfQuest.updateQuestLog)
+    if not questBusy then
+      pfMap.queue_update = nil
+      pfMap:UpdateNodes()
+    end
   end
 
   -- reset map to current zone once map is closed
+  -- also flag the frame as just-opened so the WORLD_MAP_UPDATE handler
+  -- knows to use the debounce instead of calling UpdateNodes immediately
+  -- (the burst of ~100 events during map-open rendering would otherwise
+  -- trigger multiple immediate UpdateNodes calls)
   if WorldMapFrame:IsShown() then
+    if not resetmap then
+      pfMap.mapJustOpened = true
+    end
     resetmap = true
   elseif resetmap == true then
     SetMapToCurrentZone()
