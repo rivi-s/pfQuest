@@ -34,7 +34,16 @@ local function GetNearest(xstart, ystart, db, blacklist)
       -- Use squared distance for comparison (avoid sqrt)
       local distSq = x * x + y * y
 
-      if not nearest or distSq < nearest then
+      local replace = not nearest or distSq < nearest
+      if distSq == nearest and best then
+        local previous = db[best]
+        -- Keep equal-distance choices stable even when db was rebuilt through
+        -- pairs(). Coordinates are sufficient; the index is a final tie-break.
+        replace = data[1] < previous[1]
+          or (data[1] == previous[1] and (data[2] < previous[2] or (data[2] == previous[2] and id < best)))
+      end
+
+      if replace then
         nearest = distSq
         best = id
       end
@@ -157,14 +166,26 @@ pfQuest.route.coords = {}
 pfQuest.route.Reset = function(self)
   self.coords = {}
   self.firstnode = nil
+  self.recalculate = true
   self.lastDrawX = nil
   self.lastDrawY = nil
   self.lastDrawNode = nil
 end
 
+pfQuest.route.Clear = function(self)
+  self:Reset()
+  ClearPath(objectivepath)
+  ClearPath(playerpath)
+  ClearPath(mplayerpath)
+  if self.arrow then
+    self.arrow:Hide()
+  end
+end
+
 pfQuest.route.AddPoint = function(self, tbl)
   table.insert(self.coords, tbl)
   self.firstnode = nil
+  self.recalculate = true
 end
 
 local targetTitle, targetCluster, targetLayer, targetTexture = nil, nil, nil, nil
@@ -185,6 +206,7 @@ pfQuest.route.SetTarget = function(node, default)
   targetCluster = node and node.cluster or nil
   targetLayer = node and node.layer or nil
   targetTexture = node and node.texture or nil
+  pfQuest.route.recalculate = true
 end
 
 pfQuest.route.IsTarget = function(node)
@@ -203,8 +225,29 @@ pfQuest.route.IsTarget = function(node)
 end
 
 local lastpos, completed = 0, 0
+local automaticTargetKey = nil
+local function TargetKey(data)
+  if not data then return nil end
+  local node = data[3]
+  return tostring(data[1]) .. ":" .. tostring(data[2]) .. ":" .. tostring(node and (node.title or node.spawn) or "")
+end
 local function sortfunc(a, b)
-  return a[4] < b[4]
+  -- Distances are rounded to two decimals, so ties are common.  UpdateNodes
+  -- rebuilds its list through pairs(), whose order is undefined; without a
+  -- deterministic tie-breaker the first route target can flip every refresh.
+  if a[4] ~= b[4] then
+    return a[4] < b[4]
+  end
+  if a[1] ~= b[1] then
+    return a[1] < b[1]
+  end
+  if a[2] ~= b[2] then
+    return a[2] < b[2]
+  end
+
+  local an = a[3] and (a[3].title or a[3].spawn or "") or ""
+  local bn = b[3] and (b[3].title or b[3].spawn or "") or ""
+  return tostring(an) < tostring(bn)
 end
 pfQuest.route:SetScript("OnUpdate", function()
   local xplayer, yplayer = GetPlayerMapPosition("player")
@@ -235,9 +278,31 @@ pfQuest.route:SetScript("OnUpdate", function()
       this.coords[id][4] = ceil(math.sqrt(x * x + y * y) * 100) / 100
     end
   end
-  -- sort all coords by distance only once per second
-  if not this.recalculate or this.recalculate < GetTime() then
+  -- Reorder only when the available route nodes or an explicit target change.
+  -- Re-sorting every second while the player moves causes route flicker and
+  -- expensive map redraws without improving the selected objective.
+  if this.recalculate then
     table.sort(this.coords, sortfunc)
+
+    -- Map-position updates have slight jitter. Keep the current automatic
+    -- target while it remains close to the best candidate, otherwise two
+    -- nearby objectives can continuously trade places and redraw the route.
+    if not targetTitle and automaticTargetKey and this.coords[1] then
+      local previousIndex
+      for id, data in ipairs(this.coords) do
+        if TargetKey(data) == automaticTargetKey then
+          previousIndex = id
+          break
+        end
+      end
+      if previousIndex and previousIndex > 1 then
+        local previous = this.coords[previousIndex]
+        if previous[4] <= this.coords[1][4] + 0.5 then
+          table.remove(this.coords, previousIndex)
+          table.insert(this.coords, 1, previous)
+        end
+      end
+    end
 
     -- order list on custom targets
     if targetTitle and this.coords[1] and not pfQuest.route.IsTarget(this.coords[1][3]) then
@@ -266,7 +331,9 @@ pfQuest.route:SetScript("OnUpdate", function()
       end
     end
 
-    this.recalculate = GetTime() + 1
+    automaticTargetKey = not targetTitle and TargetKey(this.coords[1]) or nil
+
+    this.recalculate = nil
   end
 
   -- show arrow when route exists and is stable

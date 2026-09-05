@@ -262,6 +262,10 @@ pfQuest:SetScript("OnUpdate", function()
           local meta = { ["addon"] = "PFQUEST", ["qlogid"] = entry[3] }
           local t1 = GetTime()
           pfDatabase:SearchQuestID(entry[2], meta)
+          -- SearchQuestID marks map nodes dirty, but does not itself request a
+          -- render. Queue one after the quest batch settles so the tracker
+          -- receives newly found same-zone objectives immediately.
+          pfMap.queue_update = GetTime()
           pfQuest:Debug(format("|cffff8800TIMER SearchQuestID: %.4fs", GetTime() - t1))
         end
       end

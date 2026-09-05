@@ -1081,19 +1081,29 @@ function pfMap:UpdateNodes()
   -- reset tracker
   pfQuest.tracker.Reset()
 
-  -- reset route
-  pfQuest.route:Reset()
-
   -- Continent and world views do not resolve to a zone map ID. Extensions can
   -- render their own pins there, but the core zone-node renderer must not use
   -- nil as a dirty-map key.
   if not map then
+    pfQuest.route:Clear()
+    pfMap.lastRouteMap = nil
     for _, pin in pairs(pfMap.pins) do
       pin:Hide()
     end
     pfMap.lastUpdateZone = nil
     pfMap.mapJustOpened = nil
+    if pfQuest.tracker and pfQuest.tracker.DoLayout then
+      pfQuest.tracker.DoLayout()
+    end
     return
+  end
+
+  -- A tracker/UI refresh can call UpdateNodes without changing any map node.
+  -- Keep the existing route in that case; resetting it redraws the path every
+  -- couple of seconds even though its inputs are unchanged.
+  if pfMap.lastRouteMap ~= map or pfMap.dirtyMaps[map] then
+    pfQuest.route:Reset()
+    pfMap.lastRouteMap = map
   end
 
   -- refresh all nodes
@@ -1141,6 +1151,13 @@ function pfMap:UpdateNodes()
           pfQuest.route:AddPoint({ x, y, pfMap.pins[i] })
         end
 
+        -- Populate the tracker even when the matching map pin is hidden by a
+        -- display preference. Hidden objective spawns are still active quests
+        -- and must remain visible in Current Zone Only mode.
+        for title, node in pairs(pfMap.pins[i].node) do
+          pfQuest.tracker.ButtonAdd(title, node)
+        end
+
         -- hide cluster nodes if set
         if pfQuest_config["showcluster"] == "0" and pfMap.pins[i].cluster then
           pfMap.pins[i]:Hide()
@@ -1148,11 +1165,6 @@ function pfMap:UpdateNodes()
         elseif pfQuest_config["showspawn"] == "0" and addon == "PFQUEST" and not pfMap.pins[i].texture then
           pfMap.pins[i]:Hide()
         else
-          -- populate quest list on map
-          for title, node in pairs(pfMap.pins[i].node) do
-            pfQuest.tracker.ButtonAdd(title, node)
-          end
-
           local px = x / 100 * mapW
           local py = y / 100 * mapH
 

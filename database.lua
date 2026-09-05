@@ -701,6 +701,18 @@ end
 
 -- ShowExtendedTooltip
 -- Draws quest informations into a tooltip
+local MAX_TOOLTIP_DESCRIPTION = 500
+local function GetTooltipDescription(text)
+  local formatted = pfDatabase:FormatQuestText(text)
+  if strlen(formatted) <= MAX_TOOLTIP_DESCRIPTION then
+    return formatted
+  end
+
+  -- Extended descriptions are useful context, but a few custom quests contain
+  -- several full paragraphs. Keep tooltips readable without hiding objectives.
+  return strsub(formatted, 1, MAX_TOOLTIP_DESCRIPTION) .. "..."
+end
+
 function pfDatabase:ShowExtendedTooltip(id, tooltip, parent, anchor, offx, offy)
   local tooltip = tooltip or GameTooltip
   local parent = parent or this
@@ -770,7 +782,7 @@ function pfDatabase:ShowExtendedTooltip(id, tooltip, parent, anchor, offx, offy)
     -- details
     if locales["D"] and locales["D"] ~= "" then
       tooltip:AddLine(" ")
-      tooltip:AddLine(pfDatabase:FormatQuestText(locales["D"]), 0.6, 0.6, 0.6, true)
+      tooltip:AddLine(GetTooltipDescription(locales["D"]), 0.6, 0.6, 0.6, true)
     end
   end
 
@@ -2020,7 +2032,9 @@ function pfDatabase:GetQuestIDs(qid)
   if header or not title then
     return
   end
-  local identifier = title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")
+  -- Version this key when resolver rules change so stale same-title matches
+  -- do not keep bypassing the improved live-objective disambiguation.
+  local identifier = "objective-v2:" .. title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")
 
   -- always make sure the quest-cache exists
   pfQuest_questcache = pfQuest_questcache or {}
@@ -2036,6 +2050,24 @@ function pfDatabase:GetQuestIDs(qid)
 
   local best = 0
   local results = {}
+
+  -- Several quest chains reuse both title and level (The Defias Brotherhood
+  -- is a prominent example).  The description fallback can tie on Turtle's
+  -- altered text, so collect actual item objectives from the quest log and
+  -- use them as a definitive stage discriminator below.
+  local objectiveItems = {}
+  local boardCount = GetNumQuestLeaderBoards(qid) or 0
+  for board = 1, boardCount do
+    local boardText, boardType = GetQuestLogLeaderBoard(board, qid)
+    if boardType == "item" and boardText then
+      local _, _, itemName = strfind(boardText, "^(.-):")
+      if itemName then
+        for itemId in pairs(pfDatabase:GetIDByName(itemName, "items")) do
+          objectiveItems[itemId] = true
+        end
+      end
+    end
+  end
 
   local tcount = 0
   -- check if multiple quests share the same name
@@ -2105,6 +2137,17 @@ function pfDatabase:GetQuestIDs(qid)
 
         -- check description and calculate score
         score = score + max(24 - lev(pfDatabase:FormatQuestText(pfDB.quests.loc[id]["D"]), text, 24), 0)
+
+        -- A matching live item objective distinguishes same-name stages even
+        -- when their title, level, and Turtle quest text are otherwise equal.
+        if quests[id]["obj"] and quests[id]["obj"]["I"] then
+          for _, itemId in pairs(quests[id]["obj"]["I"]) do
+            if objectiveItems[itemId] then
+              score = score + 64
+              break
+            end
+          end
+        end
       end
 
       if score > best then
