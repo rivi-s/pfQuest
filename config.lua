@@ -55,7 +55,7 @@ local reset = {
 
 -- default config
 pfQuest_defconfig = {
-  { -- 1: All Quests; 2: Tracked; 3: Manual; 4: Hide
+  { -- 1: All Quests; 2: Tracked; 3: Manual; 4: Hide; 5: Current Zone Only
     config = "trackingmethod",
     text = nil,
     default = 1,

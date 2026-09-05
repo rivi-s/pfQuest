@@ -580,8 +580,11 @@ function tracker.ButtonAdd(title, node)
   -- O(1) questid lookup: node.questid is set for all PFQUEST nodes from the DB.
   -- For the rare case it's missing or not in questlog (title-keyed quests), fall
   -- back to the linear scan so correctness is preserved.
-  local questid = node.questid or title
-  if node.questid and not pfQuest.questlog[node.questid] then
+  local questid = node.questid
+  -- Reset() creates dummy entries without a database node. Resolve those by
+  -- title too; otherwise the QUEST_TRACKING guard below rejects every dummy
+  -- entry before it can display (notably client-unwatched quests).
+  if not questid or not pfQuest.questlog[questid] then
     questid = title
     for qid, data in pairs(pfQuest.questlog) do
       if data.title == title then
@@ -719,7 +722,12 @@ function tracker.Reset()
     local title, level, tag, header, collapsed, complete = compat.GetQuestLogTitle(qlogid)
     if title and not header then
       local watched = IsQuestWatched(qlogid)
-      if watched then
+      -- "All Quests" must not depend on the client marking a quest as watched.
+      -- Turtle leaves some normal item/object quests (for example Hilary's
+      -- Necklace) unwatched, which previously made them disappear after the
+      -- tracker reset even though they were active in the quest log.
+      local trackingmethod = tonumber(pfQuest_config["trackingmethod"])
+      if trackingmethod ~= 5 and (watched or trackingmethod == 1) then
         local img = complete and pfQuestConfig.path .. "\\img\\complete_c" or pfQuestConfig.path .. "\\img\\complete"
         pfQuest.tracker.ButtonAdd(title, { dummy = true, addon = "PFQUEST", texture = img })
       end

@@ -162,6 +162,13 @@ pfQuest:SetScript("OnUpdate", function()
   if (this.qlogtick or 1) < GetTime() then
     local t0 = GetTime()
     if pfQuest:UpdateQuestlog() then
+      -- The map renderer is not always active while playing. Refresh the
+      -- standalone tracker here too, so newly accepted unwatched quests do
+      -- not have to wait for a map update before appearing.
+      if pfQuest.tracker then
+        pfQuest.tracker.Reset()
+        pfQuest.tracker.DoLayout()
+      end
       pfQuest:Debug(format("Update Quest|cff33ffccLog|r [|cffff3333Tick|r] %.4fs", GetTime() - t0))
     end
     this.qlogtick = GetTime() + 1
@@ -169,7 +176,10 @@ pfQuest:SetScript("OnUpdate", function()
 
   if this.updateQuestLog == true and pfQuest.queueCount == 0 then
     local t0 = GetTime()
-    pfQuest:UpdateQuestlog()
+    if pfQuest:UpdateQuestlog() and pfQuest.tracker then
+      pfQuest.tracker.Reset()
+      pfQuest.tracker.DoLayout()
+    end
     pfQuest:Debug(format("Update Quest|cff33ffccLog %.4fs", GetTime() - t0))
     this.updateQuestLog = false
   end
@@ -621,6 +631,16 @@ function pfQuest:AddWorldMapIntegration()
 
       local info = {}
       info.text = pfQuest_Loc["Hide Quests"]
+      info.checked = false
+      info.func = function()
+        UIDropDownMenu_SetSelectedID(pfQuest.mapButton, this:GetID(), 0)
+        pfQuest_config["trackingmethod"] = this:GetID()
+        pfQuest:ResetAll()
+      end
+      UIDropDownMenu_AddButton(info)
+
+      local info = {}
+      info.text = pfQuest_Loc["Current Zone Only"] or "Current Zone Only"
       info.checked = false
       info.func = function()
         UIDropDownMenu_SetSelectedID(pfQuest.mapButton, this:GetID(), 0)
