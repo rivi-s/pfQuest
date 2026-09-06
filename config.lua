@@ -53,6 +53,38 @@ local reset = {
   end,
 }
 
+StaticPopupDialogs["PFQUEST_DBURL"] = {
+  text = "Quest Database URL\nUse a homepage URL or a prefix ending with quest= / ?search=",
+  button1 = SAVE,
+  button2 = CANCEL,
+  hasEditBox = 1,
+  maxLetters = 255,
+  timeout = 0,
+  whileDead = 1,
+  hideOnEscape = 1,
+  OnShow = function()
+    local editBox = getglobal(this:GetName() .. "EditBox")
+    local saved = pfQuest_global and pfQuest_global["dburl"]
+    editBox:SetText(saved and saved ~= "" and saved or "https://database.ravencraft.io/")
+    editBox:HighlightText()
+  end,
+  OnAccept = function()
+    local editBox = getglobal(this:GetName() .. "EditBox")
+    pfQuest_global = pfQuest_global or {}
+    pfQuest_global["dburl"] = editBox:GetText()
+  end,
+  EditBoxOnEnterPressed = function()
+    local parent = this:GetParent()
+    pfQuest_global = pfQuest_global or {}
+    pfQuest_global["dburl"] = this:GetText()
+    parent:Hide()
+  end,
+}
+
+local function OpenDatabaseURL()
+  StaticPopup_Show("PFQUEST_DBURL")
+end
+
 -- default config
 pfQuest_defconfig = {
   { -- 1: All Quests; 2: Tracked; 3: Manual; 4: Hide; 5: Current Zone Only
@@ -68,6 +100,7 @@ pfQuest_defconfig = {
   { text = L["Enable Quest Tracker"], default = "1", type = "checkbox", config = "showtracker" },
   { text = L["Enable Quest Log Buttons"], default = "1", type = "checkbox", config = "questlogbuttons" },
   { text = L["Enable Quest Link Support"], default = "1", type = "checkbox", config = "questlinks" },
+  { text = "Quest Database URL", default = "1", type = "button", func = OpenDatabaseURL },
   { text = L["Show Database IDs"], default = "0", type = "checkbox", config = "showids" },
   { text = L["Draw Favorites On Login"], default = "0", type = "checkbox", config = "favonlogin" },
   { text = L["Minimum Item Drop Chance"], default = "1", type = "text", config = "mindropchance" },
@@ -279,7 +312,7 @@ function pfQuestConfig:CreateConfigEntries(config)
       frame.caption:SetPoint("LEFT", 20, 0)
       frame.caption:SetJustifyH("LEFT")
       frame.caption:SetText(data.text)
-      maxtext = max(maxtext, frame.caption:GetStringWidth())
+      maxtext = max(maxtext, frame.caption:GetStringWidth() + (data.inputwidth or 32) - 32)
 
       -- header
       if data.type == "header" then
@@ -319,7 +352,7 @@ function pfQuestConfig:CreateConfigEntries(config)
         frame.input:SetTextColor(0.2, 1, 0.8, 1)
         frame.input:SetJustifyH("RIGHT")
         frame.input:SetTextInsets(5, 5, 5, 5)
-        frame.input:SetWidth(32)
+        frame.input:SetWidth(data.inputwidth or 32)
         frame.input:SetHeight(16)
         frame.input:SetPoint("RIGHT", -20, 0)
         frame.input:SetFontObject(GameFontNormal)
@@ -329,10 +362,16 @@ function pfQuestConfig:CreateConfigEntries(config)
         end)
 
         frame.input.config = data.config
-        frame.input:SetText(pfQuest_config[data.config])
+        frame.input.globalconfig = data.globalconfig
+        local saved = data.globalconfig and pfQuest_global or pfQuest_config
+        frame.input:SetText(saved[data.globalconfig or data.config] or data.default)
 
         frame.input:SetScript("OnTextChanged", function(self)
-          pfQuest_config[this.config] = this:GetText()
+          if this.globalconfig then
+            pfQuest_global[this.globalconfig] = this:GetText()
+          else
+            pfQuest_config[this.config] = this:GetText()
+          end
         end)
 
         pfUI.api.CreateBackdrop(frame.input, nil, true)
@@ -399,7 +438,8 @@ function pfQuestConfig:UpdateConfigEntries()
       if data.type == "checkbox" then
         configframes[data.text].input:SetChecked((pfQuest_config[data.config] == "1" and true or nil))
       elseif data.type == "text" then
-        configframes[data.text].input:SetText(pfQuest_config[data.config])
+        local saved = data.globalconfig and pfQuest_global or pfQuest_config
+        configframes[data.text].input:SetText(saved[data.globalconfig or data.config] or data.default)
       end
     end
   end

@@ -15,13 +15,19 @@ local UnitLevel = UnitLevel
 
 pfQuest = CreateFrame("Frame")
 pfQuest.icons = {}
+pfQuest_global = pfQuest_global or {}
 
-if client >= 30300 then
-  pfQuest.dburl = "https://www.wowhead.com/wotlk/quest="
-elseif client >= 20400 then
-  pfQuest.dburl = "https://www.wowhead.com/tbc/quest="
-else
-  pfQuest.dburl = "https://www.wowhead.com/classic/quest="
+pfQuest.defaultdburl = "https://database.ravencraft.io/"
+
+function pfQuest:GetDatabaseURL()
+  local url = pfQuest_global["dburl"]
+  url = url and url ~= "" and url or self.defaultdburl
+  -- A plain database homepage uses its search route; custom prefixes such as
+  -- "...quest=" continue to work as entered.
+  if strsub(url, -1) == "/" then
+    url = url .. "?search="
+  end
+  return url
 end
 
 function pfQuest:Debug(msg)
@@ -195,6 +201,20 @@ pfQuest:SetScript("OnUpdate", function()
     this.updateQuestGivers = false
   end
 
+  -- Turtle can send QUEST_LOG_UPDATE before a newly accepted quest has fully
+  -- populated its objective data. Retry that one new entry shortly afterward
+  -- so its map nodes and standalone tracker do not depend on opening the map.
+  if this.questRetry and this.questRetry.at <= GetTime() then
+    local retry = this.questRetry
+    this.questRetry = nil
+    local active = pfQuest.questlog[retry.questid]
+    if active and active.qlogid == retry.qlogid and pfQuest_config["trackingmethod"] ~= 4 then
+      pfMap:DeleteNode("PFQUEST", retry.title)
+      pfDatabase:SearchQuestID(retry.questid, { ["addon"] = "PFQUEST", ["qlogid"] = retry.qlogid })
+      pfMap.queue_update = GetTime()
+    end
+  end
+
   if pfQuest.queueCount == 0 then
     return
   end
@@ -266,6 +286,14 @@ pfQuest:SetScript("OnUpdate", function()
           -- render. Queue one after the quest batch settles so the tracker
           -- receives newly found same-zone objectives immediately.
           pfMap.queue_update = GetTime()
+          if entry[4] == "NEW" then
+            this.questRetry = {
+              questid = entry[2],
+              qlogid = entry[3],
+              title = entry[1],
+              at = GetTime() + 0.5,
+            }
+          end
           pfQuest:Debug(format("|cffff8800TIMER SearchQuestID: %.4fs", GetTime() - t1))
         end
       end
@@ -446,10 +474,10 @@ function pfQuest:AddQuestLogIntegration()
   pfQuest.buttonOnline:SetPoint("TOPRIGHT", dockFrame, "TOPRIGHT", -12, -10)
   pfQuest.buttonOnline:SetScript("OnClick", function()
     if pfUI and pfUI.chat then
-      pfUI.chat.urlcopy.text:SetText(pfQuest.dburl .. (this:GetID() or 0))
+      pfUI.chat.urlcopy.text:SetText(pfQuest:GetDatabaseURL() .. (this:GetID() or 0))
       pfUI.chat.urlcopy:Show()
     else
-      StaticPopupDialogs["PFQUEST_URLCOPY"].data = pfQuest.dburl .. (this:GetID() or 0)
+      StaticPopupDialogs["PFQUEST_URLCOPY"].data = pfQuest:GetDatabaseURL() .. (this:GetID() or 0)
       local dialog = StaticPopup_Show("PFQUEST_URLCOPY")
       _G[dialog:GetName() .. "Button1"]:ClearAllPoints()
       _G[dialog:GetName() .. "Button1"]:SetPoint("BOTTOM", dialog, "BOTTOM", 0, 16)

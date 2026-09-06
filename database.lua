@@ -2034,7 +2034,7 @@ function pfDatabase:GetQuestIDs(qid)
   end
   -- Version this key when resolver rules change so stale same-title matches
   -- do not keep bypassing the improved live-objective disambiguation.
-  local identifier = "objective-v2:" .. title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")
+  local identifier = "objective-v3:" .. title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")
 
   -- always make sure the quest-cache exists
   pfQuest_questcache = pfQuest_questcache or {}
@@ -2056,6 +2056,7 @@ function pfDatabase:GetQuestIDs(qid)
   -- altered text, so collect actual item objectives from the quest log and
   -- use them as a definitive stage discriminator below.
   local objectiveItems = {}
+  local objectiveUnits = {}
   local boardCount = GetNumQuestLeaderBoards(qid) or 0
   for board = 1, boardCount do
     local boardText, boardType = GetQuestLogLeaderBoard(board, qid)
@@ -2064,6 +2065,13 @@ function pfDatabase:GetQuestIDs(qid)
       if itemName then
         for itemId in pairs(pfDatabase:GetIDByName(itemName, "items")) do
           objectiveItems[itemId] = true
+        end
+      end
+    elseif boardType == "monster" and boardText then
+      local _, _, unitName = strfind(boardText, "^(.-):")
+      if unitName then
+        for unitId in pairs(pfDatabase:GetIDByName(unitName, "units")) do
+          objectiveUnits[unitId] = true
         end
       end
     end
@@ -2143,6 +2151,17 @@ function pfDatabase:GetQuestIDs(qid)
         if quests[id]["obj"] and quests[id]["obj"]["I"] then
           for _, itemId in pairs(quests[id]["obj"]["I"]) do
             if objectiveItems[itemId] then
+              score = score + 64
+              break
+            end
+          end
+        end
+
+        -- Same-name kill stages (such as The People's Militia) need the
+        -- live target names as well; descriptions alone can be too similar.
+        if quests[id]["obj"] and quests[id]["obj"]["U"] then
+          for _, unitId in pairs(quests[id]["obj"]["U"]) do
+            if objectiveUnits[unitId] then
               score = score + 64
               break
             end
