@@ -248,33 +248,36 @@ end
 
 function tracker.ButtonEnter()
   pfMap.highlight = this.title
+  tracker.ButtonUpdate(this)
   ShowTooltip()
 end
 
 function tracker.ButtonLeave()
   pfMap.highlight = nil
+  tracker.ButtonUpdate(this)
   HideTooltip()
 end
 
-function tracker.ButtonUpdate()
+function tracker.ButtonUpdate(button)
+  local button = button or this
   local alpha = tonumber((pfQuest_config["trackeralpha"] or 0.2)) or 0.2
 
-  if not this.alpha or this.alpha ~= alpha then
-    this.bg:SetTexture(0, 0, 0, alpha)
-    this.bg:SetAlpha(alpha)
-    this.alpha = alpha
+  if not button.alpha or button.alpha ~= alpha then
+    button.bg:SetTexture(0, 0, 0, alpha)
+    button.bg:SetAlpha(alpha)
+    button.alpha = alpha
   end
 
-  if pfMap.highlight and pfMap.highlight == this.title then
-    if not this.highlight then
-      this.bg:SetTexture(1, 1, 1, math.max(0.2, alpha))
-      this.bg:SetAlpha(math.max(0.5, alpha))
-      this.highlight = true
+  if pfMap.highlight and pfMap.highlight == button.title then
+    if not button.highlight then
+      button.bg:SetTexture(1, 1, 1, math.max(0.2, alpha))
+      button.bg:SetAlpha(math.max(0.5, alpha))
+      button.highlight = true
     end
-  elseif this.highlight then
-    this.bg:SetTexture(0, 0, 0, alpha)
-    this.bg:SetAlpha(alpha)
-    this.highlight = nil
+  elseif button.highlight then
+    button.bg:SetTexture(0, 0, 0, alpha)
+    button.bg:SetAlpha(alpha)
+    button.highlight = nil
   end
 end
 
@@ -680,7 +683,6 @@ function tracker.ButtonAdd(title, node)
 
     tracker.buttons[id]:SetScript("OnEnter", tracker.ButtonEnter)
     tracker.buttons[id]:SetScript("OnLeave", tracker.ButtonLeave)
-    tracker.buttons[id]:SetScript("OnUpdate", tracker.ButtonUpdate)
     tracker.buttons[id]:SetScript("OnEvent", tracker.ButtonEvent)
     tracker.buttons[id]:SetScript("OnClick", tracker.ButtonClick)
   end
@@ -696,6 +698,7 @@ function tracker.ButtonAdd(title, node)
 
   -- reload button data
   tracker.ButtonEvent(tracker.buttons[id])
+  tracker.ButtonUpdate(tracker.buttons[id])
 end
 
 function tracker.Reset()

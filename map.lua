@@ -1214,6 +1214,15 @@ function pfMap:UpdateMinimap()
     return
   end
 
+  -- Player movement changes every frame, which used to reposition every nearby
+  -- minimap pin up to 20 times per second. That is needless while the world
+  -- map is open and expensive in dense zones.
+  local interval = WorldMapFrame:IsShown() and 0.4 or 0.15
+  if (this.minimapTick or 0) > GetTime() then
+    return
+  end
+  this.minimapTick = GetTime() + interval
+
   -- hide all minimap nodes while shift is pressed
   if controlkey.pressed and MouseIsOver(pfMap.drawlayer) then
     this.xPlayer = nil

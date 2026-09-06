@@ -192,7 +192,10 @@ pfQuest:SetScript("OnUpdate", function()
 
   if this.updateQuestGivers == true then
     pfQuest:Debug("Update Quest|cff33ffcc Givers")
-    if pfQuest_config["trackingmethod"] ~= 4 and pfQuest_config["allquestgivers"] == "1" then
+    -- A fresh profile shows the mode selector during login. Do not generate
+    -- the complete available-questgiver map behind that selector; it can add
+    -- thousands of nodes while the client is still loading.
+    if pfQuest_config["welcome"] == "1" and pfQuest_config["trackingmethod"] ~= 4 and pfQuest_config["allquestgivers"] == "1" then
       local meta = { ["addon"] = "PFQUEST" }
       local t0 = GetTime()
       pfDatabase:SearchQuests(meta)
