@@ -213,7 +213,21 @@ pfQuest:SetScript("OnUpdate", function()
     local active = pfQuest.questlog[retry.questid]
     if active and active.qlogid == retry.qlogid and pfQuest_config["trackingmethod"] ~= 4 then
       pfMap:DeleteNode("PFQUEST", retry.title)
-      pfDatabase:SearchQuestID(retry.questid, { ["addon"] = "PFQUEST", ["qlogid"] = retry.qlogid })
+      local retryMaps = pfDatabase:SearchQuestID(retry.questid, { ["addon"] = "PFQUEST", ["qlogid"] = retry.qlogid })
+      -- Current Zone Only normally receives entries while UpdateNodes walks
+      -- rendered pins. Confirm the quest is truly in the log before adding a
+      -- same-zone fallback for item/object objectives.
+      if tonumber(pfQuest_config["trackingmethod"]) == 5 and retryMaps then
+        local currentMap = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+        if currentMap and retryMaps[currentMap] then
+          -- UpdateNodes rebuilds Current Zone Only from its visible pins. Keep
+          -- confirmed item/object quests that belong to this map in a small
+          -- map-scoped cache so that rebuild cannot immediately clear them.
+          pfMap.currentZoneTracker = pfMap.currentZoneTracker or {}
+          pfMap.currentZoneTracker[currentMap] = pfMap.currentZoneTracker[currentMap] or {}
+          pfMap.currentZoneTracker[currentMap][retry.questid] = retry.title
+        end
+      end
       pfMap.queue_update = GetTime()
     end
   end

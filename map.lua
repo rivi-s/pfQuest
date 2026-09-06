@@ -1098,6 +1098,25 @@ function pfMap:UpdateNodes()
     return
   end
 
+  -- Some item/object quests resolve to this zone but do not leave a rendered
+  -- spawn pin in every map refresh. Preserve their confirmed, map-scoped
+  -- tracker entry in Current Zone Only mode. Entries vanish as soon as the
+  -- quest is no longer active.
+  if tonumber(pfQuest_config["trackingmethod"]) == 5 and pfMap.currentZoneTracker and pfMap.currentZoneTracker[map] then
+    for questid, title in pairs(pfMap.currentZoneTracker[map]) do
+      if pfQuest.questlog and pfQuest.questlog[questid] then
+        pfQuest.tracker.ButtonAdd(title, {
+          dummy = true,
+          addon = "PFQUEST",
+          questid = questid,
+          texture = pfQuestConfig.path .. "\\img\\complete",
+        })
+      else
+        pfMap.currentZoneTracker[map][questid] = nil
+      end
+    end
+  end
+
   -- A tracker/UI refresh can call UpdateNodes without changing any map node.
   -- Keep the existing route in that case; resetting it redraws the path every
   -- couple of seconds even though its inputs are unchanged.
