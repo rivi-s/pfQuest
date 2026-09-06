@@ -54,7 +54,7 @@ local reset = {
 }
 
 StaticPopupDialogs["PFQUEST_DBURL"] = {
-  text = "Quest Database URL\nUse a homepage URL or a prefix ending with quest= / ?search=",
+  text = "Quest Database URL\nUse a homepage URL or a prefix ending with ?quest=",
   button1 = SAVE,
   button2 = CANCEL,
   hasEditBox = 1,
@@ -65,11 +65,13 @@ StaticPopupDialogs["PFQUEST_DBURL"] = {
   OnShow = function()
     local editBox = getglobal(this:GetName() .. "EditBox")
     local saved = pfQuest_global and pfQuest_global["dburl"]
-    editBox:SetText(saved and saved ~= "" and saved or "https://database.ravencraft.io/")
+    editBox:SetText(saved and saved ~= "" and saved or "https://database.ravencraft.io/?quest=")
     editBox:HighlightText()
   end,
   OnAccept = function()
-    local editBox = getglobal(this:GetName() .. "EditBox")
+    local popup = this:GetParent()
+    local editBox = popup and getglobal(popup:GetName() .. "EditBox")
+    if not editBox then return end
     pfQuest_global = pfQuest_global or {}
     pfQuest_global["dburl"] = editBox:GetText()
   end,

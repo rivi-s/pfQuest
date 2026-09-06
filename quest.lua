@@ -17,15 +17,15 @@ pfQuest = CreateFrame("Frame")
 pfQuest.icons = {}
 pfQuest_global = pfQuest_global or {}
 
-pfQuest.defaultdburl = "https://database.ravencraft.io/"
+pfQuest.defaultdburl = "https://database.ravencraft.io/?quest="
 
 function pfQuest:GetDatabaseURL()
   local url = pfQuest_global["dburl"]
   url = url and url ~= "" and url or self.defaultdburl
-  -- A plain database homepage uses its search route; custom prefixes such as
-  -- "...quest=" continue to work as entered.
+  -- A plain database homepage links directly to the matching quest ID;
+  -- custom query prefixes continue to work as entered.
   if strsub(url, -1) == "/" then
-    url = url .. "?search="
+    url = url .. "?quest="
   end
   return url
 end
