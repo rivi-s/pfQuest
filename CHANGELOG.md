@@ -2,6 +2,11 @@
 
 ## 2026-09-07
 
+- Made Russian quest text selectable on English Turtle clients through pfQuest's existing Quest Log translation menu.
+- Retains only the Russian quest-text table; foreign item and NPC databases remain unloaded to limit memory use.
+
+## 2026-09-07
+
 - Fixed Russian client support: the release now loads the base Russian database before the Turtle Russian overlay.
 
 ## 2026-09-07

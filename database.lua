@@ -241,7 +241,11 @@ end
 -- nil out all other locale tables and let them be garbage collected
 for id, db in pairs(dbs) do
   for locale in pairs(pfDB.locales) do
-    if pfDB[db][locale] and pfDB[db][locale] ~= pfDB[db]["loc"] then
+    -- Keep Russian quest text available as an optional translation on
+    -- English-only Turtle clients. Other non-active locale tables are still
+    -- discarded, so this does not retain full foreign item/NPC databases.
+    local keepTranslation = id == "quests" and locale == "ruRU"
+    if pfDB[db][locale] and pfDB[db][locale] ~= pfDB[db]["loc"] and not keepTranslation then
       pfDB[db][locale] = nil
     end
   end
