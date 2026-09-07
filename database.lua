@@ -244,7 +244,7 @@ for id, db in pairs(dbs) do
     -- Keep Russian quest text available as an optional translation on
     -- English-only Turtle clients. Other non-active locale tables are still
     -- discarded, so this does not retain full foreign item/NPC databases.
-    local keepTranslation = id == "quests" and locale == "ruRU"
+    local keepTranslation = db == "quests" and locale == "ruRU"
     if pfDB[db][locale] and pfDB[db][locale] ~= pfDB[db]["loc"] and not keepTranslation then
       pfDB[db][locale] = nil
     end
@@ -830,9 +830,10 @@ end
 -- GetBitByRace
 -- Returns bit of the current race
 function pfDatabase:GetBitByRace(model)
-  -- Turtle WoW's custom race tokens are not part of the original 1.12 list.
-  -- Match the bits used by the Turtle quest database so race-specific starter
-  -- quests are not filtered out as unavailable.
+  -- Turtle WoW's High Elf client token is not part of the original 1.12
+  -- race list.  It uses the same bit as the Turtle database's High Elf
+  -- quest entries (512); without this, High-Elf-only starter quests are
+  -- treated as unavailable and their map pins are filtered out.
   if model == "HighElf" or model == "High Elf" then
     return 512
   end
@@ -2037,16 +2038,16 @@ function pfDatabase:GetQuestIDs(qid)
     end
   end
 
-  local title, level, _, header = compat.GetQuestLogTitle(qid)
-  if header or not title then
-    return
-  end
-
   -- Most quests have a unique localized title. Resolve those directly before
   -- touching the selected quest-log entry. On some heavily hooked 1.12
   -- clients, SelectQuestLogEntry during login/quest acceptance can crash the
   -- native client instead of returning a Lua error. The selection fallback is
   -- only needed when multiple database quests share the same title.
+  local title, level, _, header = compat.GetQuestLogTitle(qid)
+  if header or not title then
+    return
+  end
+
   pfQuest_questcache = pfQuest_questcache or {}
   local titleKey = "title-v1:" .. title .. ":" .. (level or "")
   if pfQuest_questcache[titleKey] and pfQuest_questcache[titleKey][1] then

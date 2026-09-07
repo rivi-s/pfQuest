@@ -164,6 +164,17 @@ pfQuest:SetScript("OnUpdate", function()
     this.tick = GetTime() + 0.05
   end
 
+  -- pfUI applies the initial Quest Log selection just after OnShow. Refresh
+  -- pfQuest once on the following tick so its controls do not require a
+  -- manual quest-selection change before appearing.
+  if this.questLogOpenRefreshAt and this.questLogOpenRefreshAt <= GetTime() then
+    this.questLogOpenRefreshAt = nil
+    if QuestLogFrame and QuestLogFrame:IsShown() then
+      pfQuest:UpdateQuestlog()
+      QuestLog_Update()
+    end
+  end
+
   -- check questlog each second
   if (this.qlogtick or 1) < GetTime() then
     local t0 = GetTime()
@@ -506,9 +517,13 @@ function pfQuest:AddQuestLogIntegration()
   dockTitle:SetJustifyV("BOTTOM")
 
   pfQuest.buttonOnline = pfQuest.buttonOnline or CreateFrame("Button", "pfQuestOnline", dockFrame)
+  pfQuest.buttonOnline:SetParent(UIParent)
+  pfQuest.buttonOnline:SetFrameStrata("DIALOG")
+  pfQuest.buttonOnline:SetFrameLevel(100)
   pfQuest.buttonOnline:SetWidth(18)
   pfQuest.buttonOnline:SetHeight(15)
-  pfQuest.buttonOnline:SetPoint("TOPRIGHT", dockFrame, "TOPRIGHT", -12, -10)
+  pfQuest.buttonOnline:ClearAllPoints()
+  pfQuest.buttonOnline:SetPoint("RIGHT", QuestLogQuestCount, "LEFT", -30, 0)
   pfQuest.buttonOnline:SetScript("OnClick", function()
     if pfUI and pfUI.chat then
       pfUI.chat.urlcopy.text:SetText(pfQuest:GetDatabaseURL() .. (this:GetID() or 0))
@@ -529,14 +544,46 @@ function pfQuest:AddQuestLogIntegration()
   pfQuest.buttonOnline.txt:SetText("|cff000000[|cffaa2222?|cff000000]")
 
   pfQuest.buttonLanguage = pfQuest.buttonLanguage or CreateFrame("Button", "pfQuestLanguage", dockFrame)
+  pfQuest.buttonLanguage:SetParent(UIParent)
+  pfQuest.buttonLanguage:SetFrameStrata("DIALOG")
+  pfQuest.buttonLanguage:SetFrameLevel(100)
   pfQuest.buttonLanguage:SetWidth(75)
   pfQuest.buttonLanguage:SetHeight(15)
+  pfQuest.buttonLanguage:ClearAllPoints()
   pfQuest.buttonLanguage:SetPoint("RIGHT", pfQuest.buttonOnline, "LEFT", 0, 0)
 
   pfQuest.buttonLanguage.txt = pfQuest.buttonLanguage:CreateFontString("pfQuestIDButton", "HIGH", "GameFontWhite")
   pfQuest.buttonLanguage.txt:SetAllPoints(pfQuest.buttonLanguage)
   pfQuest.buttonLanguage.txt:SetJustifyH("RIGHT")
   pfQuest.buttonLanguage.txt:SetText("|cff000000[|cff333333" .. pfQuest_Loc["Translate"] .. "|cff000000]")
+
+  -- The stock English client fonts do not contain Cyrillic glyphs. Keep the
+  -- replacement scoped to the quest-log text that pfQuest translates.
+  local translationFontStrings = {
+    EQL3_QuestLogQuestTitle or pfQuestCompat.QuestLogQuestTitle,
+    EQL3_QuestLogObjectivesText or pfQuestCompat.QuestLogObjectivesText,
+    EQL3_QuestLogQuestDescription or pfQuestCompat.QuestLogQuestDescription,
+  }
+  local translationFonts = {}
+  for index, fontString in ipairs(translationFontStrings) do
+    local font, size, flags = fontString:GetFont()
+    translationFonts[index] = { font = font, size = size, flags = flags }
+  end
+
+  local function SetQuestTranslationFont(language)
+    if pfQuest.translationFontLanguage == language then return end
+
+    for index, fontString in ipairs(translationFontStrings) do
+      local original = translationFonts[index]
+      if language == "ruRU" then
+        fontString:SetFont("Interface\\AddOns\\pfQuest\\fonts\\DejaVuLGCSans.ttf", original.size, original.flags)
+      else
+        fontString:SetFont(original.font, original.size, original.flags)
+      end
+    end
+
+    pfQuest.translationFontLanguage = language
+  end
 
   pfQuest.buttonLanguage:SetScript("OnClick", function()
     UIDropDownMenu_Initialize(self, function()
@@ -571,6 +618,7 @@ function pfQuest:AddQuestLogIntegration()
           .. "|cff000000]"
       )
       this.translate = pfQuest_config.translate
+      SetQuestTranslationFont(pfQuest_config.translate)
       QuestLog_UpdateQuestDetails(true)
       return
     end
@@ -587,6 +635,19 @@ function pfQuest:AddQuestLogIntegration()
       QuestLogDetailScrollFrame:UpdateScrollChildRect()
     end
   end)
+
+  -- pfUI finishes its Quest Log layout during OnShow. Refresh afterwards so
+  -- the language and database-link controls are visible on the first open.
+  if not pfQuest.questLogOnShowHook then
+    QuestLogFrame:HookScript("OnShow", function()
+      pfQuest.questLogOpenRefreshAt = GetTime() + 0.15
+    end)
+    QuestLogFrame:HookScript("OnHide", function()
+      pfQuest.buttonOnline:Hide()
+      pfQuest.buttonLanguage:Hide()
+    end)
+    pfQuest.questLogOnShowHook = true
+  end
 
   pfQuest.buttonShow = pfQuest.buttonShow or CreateFrame("Button", "pfQuestShow", dockFrame, "UIPanelButtonTemplate")
   pfQuest.buttonShow:SetWidth(70)
