@@ -2,6 +2,10 @@
 
 ## 2026-09-07
 
+- Fixed Russian client support: the release now loads the base Russian database before the Turtle Russian overlay.
+
+## 2026-09-07
+
 - Fixed Current Zone Only missing objective pins after quest acceptance; the active quest map data now receives one deferred refresh after Turtle's quest-log updates settle.
 - Added merged-spawn support so creatures sharing an exact quest-item spawn can each resolve the matching tooltip without duplicating map pins.
 

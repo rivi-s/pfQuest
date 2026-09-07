@@ -3,11 +3,11 @@
 ## Author: Shagu, txtsd
 ## Notes: A Questhelper and Database
 ## Notes-ruRU: Облегченный помощник заданий и база данных
-## Version: 8.0.8
+## Version: 8.0.9
 ## OptionalDeps: pfUI
 ## SavedVariables: pfQuest_questcache, pfQuest_global
 ## SavedVariablesPerCharacter: pfQuest_config, pfBrowser_fav, pfQuest_history, pfQuest_colors, pfQuest_server, pfQuest_track
 init\data.xml
 init\enUS.xml
-init\enUS.xml
+init\ruRU.xml
 init\addon.xml
