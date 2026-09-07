@@ -826,6 +826,16 @@ end
 -- GetBitByRace
 -- Returns bit of the current race
 function pfDatabase:GetBitByRace(model)
+  -- Turtle WoW's custom race tokens are not part of the original 1.12 list.
+  -- Match the bits used by the Turtle quest database so race-specific starter
+  -- quests are not filtered out as unavailable.
+  if model == "HighElf" or model == "High Elf" then
+    return 512
+  end
+  if model == "Goblin" then
+    return 256
+  end
+
   -- scan for regular bitmasks
   for bit, v in pairs(bitraces) do
     if model == v then
@@ -2023,15 +2033,40 @@ function pfDatabase:GetQuestIDs(qid)
     end
   end
 
-  local oldID = GetQuestLogSelection()
-  SelectQuestLogEntry(qid)
-  local text, objective = GetQuestLogQuestText()
   local title, level, _, header = compat.GetQuestLogTitle(qid)
-  SelectQuestLogEntry(oldID)
-
   if header or not title then
     return
   end
+
+  -- Most quests have a unique localized title. Resolve those directly before
+  -- touching the selected quest-log entry. On some heavily hooked 1.12
+  -- clients, SelectQuestLogEntry during login/quest acceptance can crash the
+  -- native client instead of returning a Lua error. The selection fallback is
+  -- only needed when multiple database quests share the same title.
+  pfQuest_questcache = pfQuest_questcache or {}
+  local titleKey = "title-v1:" .. title .. ":" .. (level or "")
+  if pfQuest_questcache[titleKey] and pfQuest_questcache[titleKey][1] then
+    return pfQuest_questcache[titleKey]
+  end
+
+  local exactID, exactCount = nil, 0
+  for id, data in pairs(pfDB["quests"]["loc"]) do
+    if quests[id] and data.T == title then
+      exactID = id
+      exactCount = exactCount + 1
+      if exactCount > 1 then break end
+    end
+  end
+
+  if exactCount == 1 then
+    pfQuest_questcache[titleKey] = { exactID }
+    return pfQuest_questcache[titleKey]
+  end
+
+  local oldID = GetQuestLogSelection()
+  SelectQuestLogEntry(qid)
+  local text, objective = GetQuestLogQuestText()
+  SelectQuestLogEntry(oldID)
   -- Version this key when resolver rules change so stale same-title matches
   -- do not keep bypassing the improved live-objective disambiguation.
   local identifier = "objective-v3:" .. title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")

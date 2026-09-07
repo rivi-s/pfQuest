@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 2026-09-06
+
+- Fixed High Elf and Goblin race-specific starter quest markers.
+- Avoided a native quest-log selection path for uniquely named quests, improving compatibility with older hooked clients.
+
 ## 2026-09-04
 
 - Fixed a continent/world-map refresh error caused by attempting to index a missing zone map.
