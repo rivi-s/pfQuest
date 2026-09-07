@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 2026-09-07
+
+- Fixed Current Zone Only missing objective pins after quest acceptance; the active quest map data now receives one deferred refresh after Turtle's quest-log updates settle.
+- Added merged-spawn support so creatures sharing an exact quest-item spawn can each resolve the matching tooltip without duplicating map pins.
+
 ## 2026-09-06
 
 - Fixed High Elf and Goblin race-specific starter quest markers.

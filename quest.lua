@@ -175,6 +175,7 @@ pfQuest:SetScript("OnUpdate", function()
         pfQuest.tracker.Reset()
         pfQuest.tracker.DoLayout()
       end
+      this.currentZoneRefreshAt = GetTime() + 0.75
       pfQuest:Debug(format("Update Quest|cff33ffccLog|r [|cffff3333Tick|r] %.4fs", GetTime() - t0))
     end
     this.qlogtick = GetTime() + 1
@@ -182,9 +183,12 @@ pfQuest:SetScript("OnUpdate", function()
 
   if this.updateQuestLog == true and pfQuest.queueCount == 0 then
     local t0 = GetTime()
-    if pfQuest:UpdateQuestlog() and pfQuest.tracker then
-      pfQuest.tracker.Reset()
-      pfQuest.tracker.DoLayout()
+    if pfQuest:UpdateQuestlog() then
+      if pfQuest.tracker then
+        pfQuest.tracker.Reset()
+        pfQuest.tracker.DoLayout()
+      end
+      this.currentZoneRefreshAt = GetTime() + 0.75
     end
     pfQuest:Debug(format("Update Quest|cff33ffccLog %.4fs", GetTime() - t0))
     this.updateQuestLog = false
@@ -226,6 +230,22 @@ pfQuest:SetScript("OnUpdate", function()
           pfMap.currentZoneTracker = pfMap.currentZoneTracker or {}
           pfMap.currentZoneTracker[currentMap] = pfMap.currentZoneTracker[currentMap] or {}
           pfMap.currentZoneTracker[currentMap][retry.questid] = retry.title
+        end
+      end
+      pfMap.queue_update = GetTime()
+    end
+  end
+
+  -- The server can issue its final QUEST_LOG_UPDATE after the initial node
+  -- scan. In Current Zone Only mode, rebuild the active quest nodes once the
+  -- queue has been quiet for a moment. This is event-driven (not per frame)
+  -- and leaves the tracker untouched.
+  if this.currentZoneRefreshAt and this.currentZoneRefreshAt <= GetTime() and pfQuest.queueCount == 0 then
+    this.currentZoneRefreshAt = nil
+    if tonumber(pfQuest_config["trackingmethod"]) == 5 then
+      for questid, data in pairs(pfQuest.questlog) do
+        if type(questid) == "number" and data.qlogid then
+          pfDatabase:SearchQuestID(questid, { ["addon"] = "PFQUEST", ["qlogid"] = data.qlogid })
         end
       end
       pfMap.queue_update = GetTime()

@@ -638,6 +638,27 @@ function pfMap:AddNode(meta)
       -- check if item already exists
       for id, name in pairs(pfMap.nodes[addon][map][coords][title].item) do
         if name == item then
+          -- Several creatures can share the exact same spawn coordinate and
+          -- quest-item node (for example Tunnel Rat Vermin and Scout). Keep
+          -- a tooltip alias for every matching creature even though the map
+          -- pin itself is intentionally merged into one node.
+          if spawn and title then
+            local existing = pfMap.nodes[addon][map][coords][title]
+            existing.sharedspawns = existing.sharedspawns or { [existing.spawn] = true }
+            existing.sharedspawns[spawn] = true
+
+            pfMap.tooltips[spawn] = pfMap.tooltips[spawn] or {}
+            pfMap.tooltips[spawn][title] = pfMap.tooltips[spawn][title] or {}
+            pfMap.tooltips[spawn][title][map] = existing
+
+            pfMap.tooltipIndex[title] = pfMap.tooltipIndex[title] or {}
+            pfMap.tooltipIndex[title][spawn] = true
+
+            -- The map pin stays visually merged, but its tooltip needs to
+            -- refresh so it can list every creature sharing this location.
+            pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
+            pfMap.dirtyMaps[map] = true
+          end
           return
         end
       end
@@ -985,6 +1006,7 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
       frame.arrow = tab.arrow
       frame.icon = tab.icon
       frame.fade_range = tab.fade_range
+      frame.sharedspawns = tab.sharedspawns
 
       if pfQuest_config["spawncolors"] == "1" then
         frame.color = tab.spawn or tab.title
