@@ -608,6 +608,15 @@ function pfQuest:AddQuestLogIntegration()
   end)
 
   pfQuest.buttonLanguage:SetScript("OnUpdate", function()
+    -- The controls live on UIParent so they can sit in pfUI's header. Never
+    -- leave them behind if another addon closes the Quest Log without hiding
+    -- its frame through the normal path.
+    if not QuestLogFrame:IsShown() then
+      pfQuest.buttonOnline:Hide()
+      pfQuest.buttonLanguage:Hide()
+      return
+    end
+
     local id = pfQuest.buttonOnline:GetID()
     local lang = pfQuest_config.translate
 
@@ -643,6 +652,10 @@ function pfQuest:AddQuestLogIntegration()
       pfQuest.questLogOpenRefreshAt = GetTime() + 0.15
     end)
     QuestLogFrame:HookScript("OnHide", function()
+      pfQuest.buttonOnline:Hide()
+      pfQuest.buttonLanguage:Hide()
+    end)
+    QuestLogFrameCloseButton:HookScript("OnClick", function()
       pfQuest.buttonOnline:Hide()
       pfQuest.buttonLanguage:Hide()
     end)
