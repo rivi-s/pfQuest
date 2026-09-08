@@ -648,14 +648,29 @@ function pfQuest:AddQuestLogIntegration()
   -- pfUI finishes its Quest Log layout during OnShow. Refresh afterwards so
   -- the language and database-link controls are visible on the first open.
   if not pfQuest.questLogOnShowHook then
-    QuestLogFrame:HookScript("OnShow", function()
+    local function HookFrameScript(frame, script, handler)
+      if frame.HookScript then
+        frame:HookScript(script, handler)
+        return
+      end
+
+      -- Vanilla 1.12 frames do not expose HookScript. Preserve the existing
+      -- script and append ours using the client globals (this/event/arg1).
+      local previous = frame:GetScript(script)
+      frame:SetScript(script, function()
+        if previous then previous() end
+        handler()
+      end)
+    end
+
+    HookFrameScript(QuestLogFrame, "OnShow", function()
       pfQuest.questLogOpenRefreshAt = GetTime() + 0.15
     end)
-    QuestLogFrame:HookScript("OnHide", function()
+    HookFrameScript(QuestLogFrame, "OnHide", function()
       pfQuest.buttonOnline:Hide()
       pfQuest.buttonLanguage:Hide()
     end)
-    QuestLogFrameCloseButton:HookScript("OnClick", function()
+    HookFrameScript(QuestLogFrameCloseButton, "OnClick", function()
       pfQuest.buttonOnline:Hide()
       pfQuest.buttonLanguage:Hide()
     end)
