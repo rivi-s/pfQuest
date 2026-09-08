@@ -731,7 +731,12 @@ function tracker.Reset()
       -- tracker reset even though they were active in the quest log.
       local trackingmethod = tonumber(pfQuest_config["trackingmethod"])
       if trackingmethod ~= 5 and (watched or trackingmethod == 1) then
-        local img = complete and pfQuestConfig.path .. "\\img\\complete_c" or pfQuestConfig.path .. "\\img\\complete"
+        -- Turtle can leave simple report/talk quests unflagged even though
+        -- they have no objectives and are ready to turn in.
+        local objectives = GetNumQuestLeaderBoards(qlogid)
+        local img = (complete or not objectives or objectives == 0)
+          and pfQuestConfig.path .. "\\img\\complete_c"
+          or pfQuestConfig.path .. "\\img\\complete"
         pfQuest.tracker.ButtonAdd(title, { dummy = true, addon = "PFQUEST", texture = img })
       end
 

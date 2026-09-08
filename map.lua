@@ -1126,12 +1126,21 @@ function pfMap:UpdateNodes()
   -- quest is no longer active.
   if tonumber(pfQuest_config["trackingmethod"]) == 5 and pfMap.currentZoneTracker and pfMap.currentZoneTracker[map] then
     for questid, title in pairs(pfMap.currentZoneTracker[map]) do
-      if pfQuest.questlog and pfQuest.questlog[questid] then
+      local quest = pfQuest.questlog and pfQuest.questlog[questid]
+      if quest then
+        -- The Current Zone fallback can be added before the real ender pin.
+        -- Use the quest-log state here so simple report/talk turn-ins do not
+        -- leave the tracker with the fallback's unfinished grey question mark.
+        local _, _, _, _, _, complete = compat.GetQuestLogTitle(quest.qlogid)
+        local objectives = GetNumQuestLeaderBoards(quest.qlogid)
+        local texture = (complete or not objectives or objectives == 0)
+          and pfQuestConfig.path .. "\\img\\complete_c"
+          or pfQuestConfig.path .. "\\img\\complete"
         pfQuest.tracker.ButtonAdd(title, {
           dummy = true,
           addon = "PFQUEST",
           questid = questid,
-          texture = pfQuestConfig.path .. "\\img\\complete",
+          texture = texture,
         })
       else
         pfMap.currentZoneTracker[map][questid] = nil

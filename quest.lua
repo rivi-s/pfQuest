@@ -557,8 +557,8 @@ function pfQuest:AddQuestLogIntegration()
   pfQuest.buttonLanguage.txt:SetJustifyH("RIGHT")
   pfQuest.buttonLanguage.txt:SetText("|cff000000[|cff333333" .. pfQuest_Loc["Translate"] .. "|cff000000]")
 
-  -- The stock English client fonts do not contain Cyrillic glyphs. Keep the
-  -- replacement scoped to the quest-log text that pfQuest translates.
+  -- ARIALN.TTF is bundled with the 1.12 client and includes Cyrillic glyphs.
+  -- Keep the replacement scoped to the quest-log text that pfQuest translates.
   local translationFontStrings = {
     EQL3_QuestLogQuestTitle or pfQuestCompat.QuestLogQuestTitle,
     EQL3_QuestLogObjectivesText or pfQuestCompat.QuestLogObjectivesText,
@@ -576,7 +576,7 @@ function pfQuest:AddQuestLogIntegration()
     for index, fontString in ipairs(translationFontStrings) do
       local original = translationFonts[index]
       if language == "ruRU" then
-        fontString:SetFont("Interface\\AddOns\\pfQuest\\fonts\\DejaVuLGCSans.ttf", original.size, original.flags)
+        fontString:SetFont("Fonts\\ARIALN.TTF", original.size, original.flags)
       else
         fontString:SetFont(original.font, original.size, original.flags)
       end
@@ -876,8 +876,8 @@ QuestLog_Update = function()
       pfQuest.buttonOnline:Show()
       pfQuest.buttonLanguage:Show()
       -- enable buttons
-      pfQuest.buttonShow:Enable()
-      pfQuest.buttonHide:Enable()
+      if pfQuest.buttonShow then pfQuest.buttonShow:Enable() end
+      if pfQuest.buttonHide then pfQuest.buttonHide:Enable() end
 
       if pfQuest_config.showids == "1" then
         pfQuest.buttonOnline.txt:SetText("|cff000000[|cffaa2222id: " .. questids[1] .. "|cff000000]")
@@ -887,8 +887,8 @@ QuestLog_Update = function()
       pfQuest.buttonOnline:Hide()
       pfQuest.buttonLanguage:Hide()
       -- disable buttons
-      pfQuest.buttonShow:Disable()
-      pfQuest.buttonHide:Disable()
+      if pfQuest.buttonShow then pfQuest.buttonShow:Disable() end
+      if pfQuest.buttonHide then pfQuest.buttonHide:Disable() end
     end
   end
 end
