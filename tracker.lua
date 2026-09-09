@@ -123,14 +123,6 @@ tracker:SetScript("OnMouseUp", function()
 end)
 
 tracker:SetScript("OnUpdate", function()
-  if not this.nextSectionCheck or GetTime() >= this.nextSectionCheck then
-    this.nextSectionCheck = GetTime() + 0.25
-    local _, signature = ReadQuestLogVisibility()
-    if this.sectionSignature ~= signature then
-      this.sectionSignature = signature
-      this:ScheduleLayout()
-    end
-  end
   -- Objective updates can change an entry's height. Reflow the complete list
   -- once the QUEST_LOG_UPDATE burst settles so entries never retain old offsets.
   if this.layoutAt and this.layoutAt <= GetTime() then
@@ -160,6 +152,14 @@ tracker:SetScript("OnUpdate", function()
   if pfQuestCompat.QuestWatchFrame:IsShown() then
     pfQuestCompat.QuestWatchFrame:Hide()
   end
+end)
+
+-- Section collapse/expand emits QUEST_LOG_UPDATE. Refresh on that event
+-- instead of scanning the full quest log from the map tracker's OnUpdate.
+tracker:RegisterEvent("QUEST_LOG_UPDATE")
+tracker:SetScript("OnEvent", function()
+  this.sectionSignature = nil
+  this:ScheduleLayout()
 end)
 
 tracker:SetScript("OnShow", function()

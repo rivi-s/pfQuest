@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.17 — 2026-09-09
+
+- Fixed periodic FPS hitches caused by the collapsed quest-section tracker update.
+- The tracker now refreshes collapsed sections only when the quest log changes.
+
 ## 8.0.16 — 2026-09-08
 
 - Quest tracker now hides quests in collapsed quest-log sections and restores them when expanded.
