@@ -649,13 +649,8 @@ function pfQuest:AddQuestLogIntegration()
   -- the language and database-link controls are visible on the first open.
   if not pfQuest.questLogOnShowHook then
     local function HookFrameScript(frame, script, handler)
-      if frame.HookScript then
-        frame:HookScript(script, handler)
-        return
-      end
-
-      -- Vanilla 1.12 frames do not expose HookScript. Preserve the existing
-      -- script and append ours using the client globals (this/event/arg1).
+      -- Some Turtle clients expose HookScript as a non-callable frame field.
+      -- Preserve the existing script and append ours directly instead.
       local previous = frame:GetScript(script)
       frame:SetScript(script, function()
         if previous then previous() end

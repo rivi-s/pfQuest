@@ -1,5 +1,11 @@
 # pfQuest base patch notes
 
+## 8.0.15 — 2026-09-08
+
+- Fixed Quest Log controls on clients with incompatible HookScript implementations.
+- Quest browser links now contain the actual quest ID.
+- Unresolved quest links are inserted as plain text instead of invalid Quest 0 links.
+
 ## 2026-09-07
 
 - Made Russian quest text selectable on English Turtle clients through pfQuest's existing Quest Log translation menu.

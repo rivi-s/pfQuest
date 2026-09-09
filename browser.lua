@@ -409,7 +409,8 @@ local function ResultButtonReload(self)
   -- actions by search type
   if self.btype == "quests" then
     self.name = pfDB[self.btype]["loc"][self.id]["T"]
-    self.text:SetText("|cffffcc00|Hquest:0:0:0:0|h[" .. self.name .. "]|h|r")
+    local level = pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["lvl"] or 0
+    self.text:SetText("|cffffcc00|Hquest:" .. self.id .. ":" .. level .. "|h[" .. self.name .. "]|h|r")
   elseif self.btype == "units" or self.btype == "objects" then
     local level = pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["lvl"] or ""
     if level and level ~= "" then

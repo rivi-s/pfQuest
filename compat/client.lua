@@ -46,14 +46,16 @@ end
 
 -- vanilla+tbc+wotlk: base function to insert quest links to the chat
 pfQuestCompat.InsertQuestLink = function(questid, name)
-  local questid = questid or 0
+  local questid = tonumber(questid) or 0
   local fallback = name or UNKNOWN
   local level = pfDB["quests"]["data"][questid] and pfDB["quests"]["data"][questid]["lvl"] or 0
   local name = pfDB["quests"]["loc"][questid] and pfDB["quests"]["loc"][questid]["T"] or fallback
   local hex = pfUI.api.rgbhex(pfQuestCompat.GetDifficultyColor(level))
 
   ChatFrameEditBox:Show()
-  if pfQuest_config["questlinks"] == "1" then
+  -- Unknown IDs cannot be resolved by other addons' hover tooltips.
+  -- Preserve the title as plain text instead of publishing quest:0.
+  if pfQuest_config["questlinks"] == "1" and questid > 0 then
     ChatFrameEditBox:Insert(hex .. "|Hquest:" .. questid .. ":" .. level .. "|h[" .. name .. "]|h|r")
   else
     ChatFrameEditBox:Insert("[" .. name .. "]")
