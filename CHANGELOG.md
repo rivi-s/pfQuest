@@ -1,5 +1,11 @@
 # pfQuest base patch notes
 
+## 8.0.19 — 2026-09-09
+
+- Kept the configuration layout unchanged while removing full quest resets from ordinary checkbox changes.
+- Coalesced map display refreshes, applied tracker and route settings directly, and deferred quest-giver rebuilds.
+- Replaced the reloading Save & Close action with Close; settings remain saved as they are changed.
+
 ## 8.0.18 — 2026-09-09
 
 - Restored automatic quest-tracker visibility after login and reload.

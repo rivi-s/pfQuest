@@ -251,12 +251,70 @@ pfQuestConfig.save = CreateFrame("Button", "pfQuestConfigReload", pfQuestConfig)
 pfQuestConfig.save:SetWidth(160)
 pfQuestConfig.save:SetHeight(28)
 pfQuestConfig.save:SetPoint("BOTTOMRIGHT", -10, 10)
-pfQuestConfig.save:SetScript("OnClick", ReloadUI)
+pfQuestConfig.save:SetScript("OnClick", function()
+  pfQuestConfig:Hide()
+end)
 pfQuestConfig.save.text = pfQuestConfig.save:CreateFontString("Caption", "LOW", "GameFontWhite")
 pfQuestConfig.save.text:SetAllPoints(pfQuestConfig.save)
 pfQuestConfig.save.text:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
-pfQuestConfig.save.text:SetText(L["Save & Close"])
+pfQuestConfig.save.text:SetText(L["Close"])
 pfUI.api.SkinButton(pfQuestConfig.save)
+
+-- Most settings already update their saved value as soon as the control is
+-- clicked. Keep rendering work coalesced instead of rebuilding every quest
+-- node for each checkbox in a row.
+local refreshFrame = CreateFrame("Frame")
+refreshFrame:Hide()
+
+function pfQuestConfig:RequestRefresh(kind)
+  if kind == "full" then
+    self.pendingRefresh = "full"
+  elseif not self.pendingRefresh then
+    self.pendingRefresh = "map"
+  end
+  self.refreshAt = GetTime() + 0.15
+  refreshFrame:Show()
+end
+
+refreshFrame:SetScript("OnUpdate", function()
+  if not pfQuestConfig.refreshAt or pfQuestConfig.refreshAt > GetTime() then
+    return
+  end
+
+  local kind = pfQuestConfig.pendingRefresh
+  pfQuestConfig.pendingRefresh = nil
+  pfQuestConfig.refreshAt = nil
+  this:Hide()
+
+  if kind == "full" then
+    pfQuest:ResetAll()
+  elseif kind == "map" and pfMap then
+    pfMap:UpdateNodes()
+    if pfMap.UpdateMinimap then pfMap:UpdateMinimap() end
+  end
+end)
+
+local fullRefreshSettings = {
+  allquestgivers = true,
+  currentquestgivers = true,
+  showlowlevel = true,
+  showhighlevel = true,
+  showfestival = true,
+}
+
+local mapRefreshSettings = {
+  showspawn = true,
+  showspawnmini = true,
+  showcluster = true,
+  showclustermini = true,
+  minimapnodes = true,
+  trackingicons = true,
+  clustermono = true,
+  cutoutminimap = true,
+  cutoutworldmap = true,
+  spawncolors = true,
+  mouseover = true,
+}
 
 function pfQuestConfig:LoadConfig()
   if not pfQuest_config then
@@ -346,7 +404,24 @@ function pfQuestConfig:CreateConfigEntries(config)
             pfQuest_config[this.config] = "0"
           end
 
-          pfQuest:ResetAll()
+          if this.config == "showtracker" and pfQuest.tracker then
+            if pfQuest_config[this.config] == "1" then
+              pfQuest.tracker:Show()
+            else
+              pfQuest.tracker:Hide()
+            end
+          elseif this.config == "trackerlevel" or this.config == "trackerexpand" then
+            if pfQuest.tracker and pfQuest.tracker.DoLayout then
+              pfQuest.tracker.DoLayout()
+            end
+          elseif fullRefreshSettings[this.config] then
+            pfQuestConfig:RequestRefresh("full")
+          elseif mapRefreshSettings[this.config] then
+            pfQuestConfig:RequestRefresh("map")
+          elseif this.config == "routes" or this.config == "routecluster" or this.config == "routeender"
+            or this.config == "routestarter" or this.config == "routeminimap" or this.config == "arrow" then
+            if pfQuest.route then pfQuest.route:Reset() end
+          end
         end)
       elseif data.type == "text" then
         -- input field
