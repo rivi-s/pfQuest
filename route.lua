@@ -470,6 +470,15 @@ pfQuest.route.arrow:SetScript("OnUpdate", function()
     return
   end
 
+  -- A disabled arrow must stop before any position, texture, or model work.
+  -- This also makes configuration changes take effect immediately instead of
+  -- waiting for the invalid-route debounce below.
+  if pfQuest_config["arrow"] ~= "1" then
+    invalid = nil
+    this:Hide()
+    return
+  end
+
   -- Route coordinates update at 20 Hz. Updating the visual arrow more often
   -- only repeats the same calculations and creates garbage every render frame.
   if (this.tick or 0) > GetTime() then
@@ -482,7 +491,7 @@ pfQuest.route.arrow:SetScript("OnUpdate", function()
   target = this.parent.coords and this.parent.coords[1] and this.parent.coords[1][4] and this.parent.coords[1] or nil
 
   -- disable arrow on invalid map/route
-  if not target or wrongmap or pfQuest_config["arrow"] == "0" then
+  if not target or wrongmap then
     if invalid and invalid < GetTime() then
       this:Hide()
     elseif not invalid then

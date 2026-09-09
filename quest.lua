@@ -113,6 +113,13 @@ pfQuest:RegisterEvent("PLAYER_LEVEL_UP")
 pfQuest:RegisterEvent("PLAYER_ENTERING_WORLD")
 pfQuest:RegisterEvent("SKILL_LINES_CHANGED")
 pfQuest:RegisterEvent("ADDON_LOADED")
+-- ClassicAPI supplies explicit accept/turn-in notifications. The legacy
+-- QUEST_LOG_UPDATE route remains registered for ordinary 1.12 clients.
+if pfQuestCompat.optional and pfQuestCompat.optional.questEvents then
+  pfQuest:RegisterEvent("QUEST_ACCEPTED")
+  pfQuest:RegisterEvent("QUEST_TURNED_IN")
+  pfQuest:RegisterEvent("QUEST_REMOVED")
+end
 pfQuest:SetScript("OnEvent", function()
   if event == "ADDON_LOADED" then
     if arg1 == "pfQuest" or arg1 == "pfQuest-tbc" or arg1 == "pfQuest-wotlk" then

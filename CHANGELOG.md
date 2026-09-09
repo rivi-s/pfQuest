@@ -1,5 +1,13 @@
 # pfQuest base patch notes
 
+## 8.0.20 — 2026-09-09
+
+- Added Current Zone Only support for subareas and continent maps.
+- Added Hide Quest Pins In Unexplored Areas. Zone-map exploration is cached when a player opens that map; Turtle continent pins use the same cache without changing the viewed map.
+- Fixed checkboxes that could remain visibly checked after being disabled.
+- Fixed the route-arrow toggle so disabling it immediately stops and hides the arrow.
+- Added optional ClassicAPI and HearthDB detection. ClassicAPI clients use direct item-icon lookup and quest lifecycle events.
+
 ## 8.0.19 — 2026-09-09
 
 - Kept the configuration layout unchanged while removing full quest resets from ordinary checkbox changes.

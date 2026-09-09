@@ -1093,6 +1093,60 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
   frame.node = node
 end
 
+local function GetExploredBounds()
+  if not GetNumMapOverlays or not GetMapOverlayInfo or not GetMapInfo then return nil end
+
+  local _, mapHeight, mapWidth = GetMapInfo()
+  if not mapWidth or not mapHeight or mapWidth == 0 or mapHeight == 0 then return nil end
+
+  local bounds = {}
+  for index = 1, GetNumMapOverlays() do
+    local texture, width, height, offsetX, offsetY = GetMapOverlayInfo(index)
+    if texture and texture ~= "" and width and height and offsetX and offsetY then
+      table.insert(bounds, {
+        left = offsetX / mapWidth * 100,
+        right = (offsetX + width) / mapWidth * 100,
+        top = offsetY / mapHeight * 100,
+        bottom = (offsetY + height) / mapHeight * 100,
+      })
+    end
+  end
+  return bounds
+end
+
+local function IsExploredPosition(bounds, x, y)
+  if not bounds then return true end
+  for _, area in pairs(bounds) do
+    if x >= area.left and x <= area.right and y >= area.top and y <= area.bottom then
+      return true
+    end
+  end
+  return false
+end
+
+-- The Turtle database extension also draws projected continent pins. Keep the
+-- most recently known exploration overlays by source zone so it can apply the
+-- same visibility rule there without changing the map the player is viewing.
+-- Persist discoveries made during ordinary map browsing. We never switch maps
+-- ourselves: each zone enters this cache only after the player has opened it.
+pfQuest_config.exploredareas = pfQuest_config.exploredareas or {}
+pfMap.exploredAreas = pfQuest_config.exploredareas
+pfMap.IsExploredPosition = IsExploredPosition
+
+function pfMap:GetPlayerMapID()
+  -- GetRealZoneText is independent of whichever map the player is browsing.
+  -- It also resolves sub-areas to their real parent zone map.
+  local mapID = GetRealZoneText and pfMap:GetMapIDByName(GetRealZoneText())
+  return mapID or pfMap.playerMapID
+end
+
+function pfMap:CacheCurrentExploration(mapID)
+  local bounds = GetExploredBounds()
+  if mapID and bounds then
+    self.exploredAreas[mapID] = bounds
+  end
+end
+
 function pfMap:UpdateNodes()
   pfQuest:Debug("Update Nodes")
 
@@ -1118,6 +1172,20 @@ function pfMap:UpdateNodes()
       pfQuest.tracker.DoLayout()
     end
     return
+  end
+
+  -- Current Zone Only follows the player's zone, not a different zone selected
+  -- while browsing the World Map.
+  if tonumber(pfQuest_config["trackingmethod"]) == 5 and pfMap:GetPlayerMapID() and map ~= pfMap:GetPlayerMapID() then
+    pfQuest.route:Clear()
+    for _, pin in pairs(pfMap.pins) do pin:Hide() end
+    if pfQuest.tracker and pfQuest.tracker.DoLayout then pfQuest.tracker.DoLayout() end
+    return
+  end
+
+  local exploredBounds = GetExploredBounds()
+  if exploredBounds then
+    pfMap:CacheCurrentExploration(map)
   end
 
   -- Some item/object quests resolve to this zone but do not leave a rendered
@@ -1208,8 +1276,11 @@ function pfMap:UpdateNodes()
           pfQuest.tracker.ButtonAdd(title, node)
         end
 
+        -- Hide pfQuest pins outside the character's discovered map overlays.
+        if addon == "PFQUEST" and pfQuest_config["hideunexplored"] == "1" and not IsExploredPosition(exploredBounds, x, y) then
+          pfMap.pins[i]:Hide()
         -- hide cluster nodes if set
-        if pfQuest_config["showcluster"] == "0" and pfMap.pins[i].cluster then
+        elseif pfQuest_config["showcluster"] == "0" and pfMap.pins[i].cluster then
           pfMap.pins[i]:Hide()
         -- hide individual quest spawns
         elseif pfQuest_config["showspawn"] == "0" and addon == "PFQUEST" and not pfMap.pins[i].texture then
@@ -1410,6 +1481,7 @@ pfMap:SetScript("OnEvent", function()
   if event == "ZONE_CHANGED" or event == "MINIMAP_ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" then
     if not WorldMapFrame:IsShown() then
       SetMapToCurrentZone()
+      pfMap.playerMapID = pfMap:GetPlayerMapID() or pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
     end
   end
 
@@ -1422,6 +1494,13 @@ pfMap:SetScript("OnEvent", function()
   -- (4) Same zone, dirty nodes: stamp debounce.
   if event == "WORLD_MAP_UPDATE" then
     local newzone = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+
+    -- Let the selected zone finish drawing before reading its overlay data.
+    -- The first WORLD_MAP_UPDATE arrives before 1.12 has populated fog data.
+    if newzone and WorldMapFrame:IsShown() then
+      pfMap.explorationCacheMap = newzone
+      pfMap.explorationCacheAt = GetTime() + 0.35
+    end
 
     if newzone == nil then
       -- continent view: hide all worldmap pins immediately
@@ -1495,6 +1574,15 @@ pfMap:SetScript("OnUpdate", function()
     end
   end
 
+  if pfMap.explorationCacheAt and pfMap.explorationCacheAt <= GetTime() then
+    local map = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+    if WorldMapFrame:IsShown() and map == pfMap.explorationCacheMap then
+      pfMap:CacheCurrentExploration(map)
+    end
+    pfMap.explorationCacheMap = nil
+    pfMap.explorationCacheAt = nil
+  end
+
   -- reset map to current zone once map is closed
   -- also flag the frame as just-opened so the WORLD_MAP_UPDATE handler
   -- knows to use the debounce instead of calling UpdateNodes immediately
@@ -1507,6 +1595,7 @@ pfMap:SetScript("OnUpdate", function()
     resetmap = true
   elseif resetmap == true then
     SetMapToCurrentZone()
+    pfMap.playerMapID = pfMap:GetPlayerMapID() or pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
     resetmap = nil
   end
 

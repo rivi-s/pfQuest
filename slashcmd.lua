@@ -52,6 +52,7 @@ SlashCmdList["PFDB"] = function(input, editbox)
     DEFAULT_CHAT_FRAME:AddMessage(
       "|cff33ffcc/db|cffffffff query |cffcccccc - " .. pfQuest_Loc["Query the server for completed quests"]
     )
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffcc/db|cffffffff api |cffcccccc - Show optional API support")
     return
   end
 
@@ -71,6 +72,17 @@ SlashCmdList["PFDB"] = function(input, editbox)
     arg2parts[i - 1] = commandlist[i]
   end
   local arg2 = concat(arg2parts, " ")
+
+  -- argument: api
+  if arg1 == "api" then
+    local optional = pfQuestCompat.optional or {}
+    DEFAULT_CHAT_FRAME:AddMessage(
+      "|cff33ffccpf|cffffffffQuest optional APIs: ClassicAPI=" .. tostring(optional.classicapi and true or false)
+      .. " (nameplates=" .. tostring(optional.nameplates and true or false) .. ")"
+      .. ", HearthDB=" .. tostring(optional.hearthdb and true or false)
+    )
+    return
+  end
 
   -- argument: debug
   if arg1 == "debug" then
