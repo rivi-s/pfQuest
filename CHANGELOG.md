@@ -1,5 +1,12 @@
 # pfQuest base patch notes
 
+## 8.0.18 — 2026-09-09
+
+- Restored automatic quest-tracker visibility after login and reload.
+- Reduced idle quest-log polling from once per second to a one-minute fallback; normal quest events still refresh immediately.
+- Reduced quest-arrow allocation by updating its visual state at the route update rate instead of every rendered frame.
+- Made the Quest Log Translate label blue before a language is selected.
+
 ## 8.0.17 — 2026-09-09
 
 - Fixed periodic FPS hitches caused by the collapsed quest-section tracker update.

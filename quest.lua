@@ -175,8 +175,10 @@ pfQuest:SetScript("OnUpdate", function()
     end
   end
 
-  -- check questlog each second
-  if (this.qlogtick or 1) < GetTime() then
+  -- Game events refresh the quest log immediately. Keep a slow fallback for
+  -- clients that miss an event, but do not rebuild every active quest once
+  -- per second while the player is idle.
+  if (this.qlogtick or 60) < GetTime() then
     local t0 = GetTime()
     if pfQuest:UpdateQuestlog() then
       -- The map renderer is not always active while playing. Refresh the
@@ -189,7 +191,7 @@ pfQuest:SetScript("OnUpdate", function()
       this.currentZoneRefreshAt = GetTime() + 0.75
       pfQuest:Debug(format("Update Quest|cff33ffccLog|r [|cffff3333Tick|r] %.4fs", GetTime() - t0))
     end
-    this.qlogtick = GetTime() + 1
+    this.qlogtick = GetTime() + 60
   end
 
   if this.updateQuestLog == true and pfQuest.queueCount == 0 then
@@ -555,7 +557,7 @@ function pfQuest:AddQuestLogIntegration()
   pfQuest.buttonLanguage.txt = pfQuest.buttonLanguage:CreateFontString("pfQuestIDButton", "HIGH", "GameFontWhite")
   pfQuest.buttonLanguage.txt:SetAllPoints(pfQuest.buttonLanguage)
   pfQuest.buttonLanguage.txt:SetJustifyH("RIGHT")
-  pfQuest.buttonLanguage.txt:SetText("|cff000000[|cff333333" .. pfQuest_Loc["Translate"] .. "|cff000000]")
+  pfQuest.buttonLanguage.txt:SetText("|cff000000[|cff3333ff" .. pfQuest_Loc["Translate"] .. "|cff000000]")
 
   -- ARIALN.TTF is bundled with the 1.12 client and includes Cyrillic glyphs.
   -- Keep the replacement scoped to the quest-log text that pfQuest translates.
@@ -623,7 +625,7 @@ function pfQuest:AddQuestLogIntegration()
     if this.translate ~= pfQuest_config.translate then
       pfQuest.buttonLanguage.txt:SetText(
         "|cff000000[|cff3333ff"
-          .. (pfDB.locales[pfQuest_config.translate] or "|cff333333" .. pfQuest_Loc["Translate"])
+          .. (pfDB.locales[pfQuest_config.translate] or "|cff3333ff" .. pfQuest_Loc["Translate"])
           .. "|cff000000]"
       )
       this.translate = pfQuest_config.translate

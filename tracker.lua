@@ -158,8 +158,21 @@ end)
 -- instead of scanning the full quest log from the map tracker's OnUpdate.
 tracker:RegisterEvent("QUEST_LOG_UPDATE")
 tracker:SetScript("OnEvent", function()
-  this.sectionSignature = nil
-  this:ScheduleLayout()
+  if event == "PLAYER_ENTERING_WORLD" then
+    -- update font sizes according to config
+    fontsize = tonumber(pfQuest_config["trackerfontsize"]) or 12
+    entryheight = ceil(fontsize * 1.6)
+
+    -- restore tracker state
+    if pfQuest_config["showtracker"] and pfQuest_config["showtracker"] == "0" then
+      this:Hide()
+    else
+      this:Show()
+    end
+  elseif event == "QUEST_LOG_UPDATE" then
+    this.sectionSignature = nil
+    this:ScheduleLayout()
+  end
 end)
 
 tracker:SetScript("OnShow", function()

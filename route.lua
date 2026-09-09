@@ -470,6 +470,13 @@ pfQuest.route.arrow:SetScript("OnUpdate", function()
     return
   end
 
+  -- Route coordinates update at 20 Hz. Updating the visual arrow more often
+  -- only repeats the same calculations and creates garbage every render frame.
+  if (this.tick or 0) > GetTime() then
+    return
+  end
+  this.tick = GetTime() + 0.05
+
   xplayer, yplayer = GetPlayerMapPosition("player")
   wrongmap = xplayer == 0 and yplayer == 0 and true or nil
   target = this.parent.coords and this.parent.coords[1] and this.parent.coords[1][4] and this.parent.coords[1] or nil
