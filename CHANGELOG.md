@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.16 — 2026-09-08
+
+- Quest tracker now hides quests in collapsed quest-log sections and restores them when expanded.
+- Collapsed sections do not remove active quest data or map markers.
+
 ## 8.0.15 — 2026-09-08
 
 - Fixed Quest Log controls on clients with incompatible HookScript implementations.

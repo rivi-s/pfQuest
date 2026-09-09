@@ -11,6 +11,26 @@ local fontsize = 12
 local panelheight = 16
 local entryheight = 20
 
+-- Some clients omit collapsed quests from the list; others still return them.
+-- Support both layouts without removing anything from pfQuest's quest cache.
+local function ReadQuestLogVisibility()
+  local visible, signature = {}, {}
+  local hidden, hasCollapsed = false, false
+  for i = 1, GetNumQuestLogEntries() do
+    local title, _, _, header, collapsed = compat.GetQuestLogTitle(i)
+    if title then
+      if header then
+        hidden = collapsed == true or collapsed == 1
+        if hidden then hasCollapsed = true end
+      elseif not hidden then
+        visible[title] = true
+      end
+      table.insert(signature, title .. ":" .. tostring(header) .. ":" .. tostring(collapsed))
+    end
+  end
+  return hasCollapsed and visible or nil, table.concat(signature, "\n")
+end
+
 local function HideTooltip()
   GameTooltip:Hide()
 end
@@ -103,6 +123,14 @@ tracker:SetScript("OnMouseUp", function()
 end)
 
 tracker:SetScript("OnUpdate", function()
+  if not this.nextSectionCheck or GetTime() >= this.nextSectionCheck then
+    this.nextSectionCheck = GetTime() + 0.25
+    local _, signature = ReadQuestLogVisibility()
+    if this.sectionSignature ~= signature then
+      this.sectionSignature = signature
+      this:ScheduleLayout()
+    end
+  end
   -- Objective updates can change an entry's height. Reflow the complete list
   -- once the QUEST_LOG_UPDATE burst settles so entries never retain old offsets.
   if this.layoutAt and this.layoutAt <= GetTime() then
@@ -537,6 +565,8 @@ function tracker.DoLayout()
     end
   end
 
+  local visibleQuests = tracker.mode == "QUEST_TRACKING" and ReadQuestLogVisibility() or nil
+
   -- resize window and align buttons
   local height = panelheight
   local width = 100
@@ -546,7 +576,8 @@ function tracker.DoLayout()
     button:ClearAllPoints()
     button:SetPoint("TOPRIGHT", tracker, "TOPRIGHT", 0, -height)
     button:SetPoint("TOPLEFT", tracker, "TOPLEFT", 0, -height)
-    if not button.empty then
+    if not button.empty and (not visibleQuests or visibleQuests[button.title]) then
+      button:Show()
       height = height + button:GetHeight()
 
       -- Cache GetStringWidth result (avoid calling twice)
@@ -563,6 +594,8 @@ function tracker.DoLayout()
           end
         end
       end
+    else
+      button:Hide()
     end
   end
 
