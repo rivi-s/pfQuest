@@ -519,6 +519,19 @@ function pfDatabase:BuildNameIndex()
     end
   end
 
+  -- Quest localizations contain title/objective/description tables rather
+  -- than plain strings. Index their titles separately so same-name chain
+  -- resolution does not scan the whole quest database on every turn-in.
+  idx.quests = {}
+  for id, loc in pairs(pfDB["quests"]["loc"]) do
+    if quests[id] and loc and loc.T then
+      if not idx.quests[loc.T] then
+        idx.quests[loc.T] = {}
+      end
+      insert(idx.quests[loc.T], id)
+    end
+  end
+
   -- locale tables may have changed; force SearchQuests to re-add all nodes
   for id in pairs(self.lastQuestGiversSet) do
     self.lastQuestGiversSet[id] = nil
@@ -1897,10 +1910,20 @@ function pfDatabase:SearchQuests(meta, maps)
   -- Phase 2: remove nodes for quests that left the passing set.
   local t_rm0 = GetTime()
   local removed = 0
+  local activeRebuild = {}
   for id in pairs(self.lastQuestGiversSet) do
     if not currentSet[id] then
       local title = (pfDB.quests.loc[id] and pfDB.quests.loc[id].T) or UNKNOWN
       pfMap:DeleteNode("PFQUEST", title)
+      -- Available quest-giver markers and active quest objectives currently
+      -- share their title/node namespace.  Accepting a quest therefore makes
+      -- it leave this available set, and the title removal would otherwise
+      -- also erase its just-added objective pins. Rebuild only that confirmed
+      -- active quest after the availability delta is complete.
+      local active = pfQuest.questlog and pfQuest.questlog[id]
+      if active and active.qlogid then
+        activeRebuild[id] = active.qlogid
+      end
       removed = removed + 1
     end
   end
@@ -1971,6 +1994,13 @@ function pfDatabase:SearchQuests(meta, maps)
     end
   end
 
+  -- Restore active-objective nodes that were removed alongside their former
+  -- quest-giver marker above. SearchQuestID deduplicates coordinates, so this
+  -- only repopulates the affected active quests.
+  for id, qlogid in pairs(activeRebuild) do
+    pfDatabase:SearchQuestID(id, { ["addon"] = "PFQUEST", ["qlogid"] = qlogid })
+  end
+
   -- Update lastQuestGiversSet to reflect the current passing set.
   -- Reuse the table in-place to avoid allocation.
   for id in pairs(self.lastQuestGiversSet) do
@@ -2028,9 +2058,13 @@ end
 -- Try to guess the quest ID based on the questlog ID
 -- Returns possible quest IDs
 function pfDatabase:GetQuestIDs(qid)
-  if GetQuestLink then
-    local questLink = GetQuestLink(qid)
-    if questLink then
+  -- Some enhanced 1.12 clients expose GetQuestLinkForLogIndex instead of
+  -- GetQuestLink. Both provide the exact ID without selecting the quest-log
+  -- row, which avoids a visible hitch on same-name quest chains.
+  local getQuestLink = GetQuestLink or GetQuestLinkForLogIndex
+  if getQuestLink then
+    local ok, questLink = pcall(getQuestLink, qid)
+    if ok and questLink then
       local _, _, id = strfind(questLink, "|c.*|Hquest:([%d]+):([-]?[%d]+)|h%[(.*)%]|h|r")
       if id then
         return { [1] = tonumber(id) }
@@ -2049,19 +2083,14 @@ function pfDatabase:GetQuestIDs(qid)
   end
 
   pfQuest_questcache = pfQuest_questcache or {}
-  local titleKey = "title-v1:" .. title .. ":" .. (level or "")
+  local titleKey = "title-v2:" .. title .. ":" .. (level or "")
   if pfQuest_questcache[titleKey] and pfQuest_questcache[titleKey][1] then
     return pfQuest_questcache[titleKey]
   end
 
-  local exactID, exactCount = nil, 0
-  for id, data in pairs(pfDB["quests"]["loc"]) do
-    if quests[id] and data.T == title then
-      exactID = id
-      exactCount = exactCount + 1
-      if exactCount > 1 then break end
-    end
-  end
+  local titleCandidates = pfDatabase.nameIndex.quests and pfDatabase.nameIndex.quests[title]
+  local exactID = titleCandidates and titleCandidates[1]
+  local exactCount = titleCandidates and table.getn(titleCandidates) or 0
 
   if exactCount == 1 then
     pfQuest_questcache[titleKey] = { exactID }
@@ -2074,7 +2103,7 @@ function pfDatabase:GetQuestIDs(qid)
   SelectQuestLogEntry(oldID)
   -- Version this key when resolver rules change so stale same-title matches
   -- do not keep bypassing the improved live-objective disambiguation.
-  local identifier = "objective-v3:" .. title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")
+  local identifier = "objective-v4:" .. title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")
 
   -- always make sure the quest-cache exists
   pfQuest_questcache = pfQuest_questcache or {}
@@ -2117,13 +2146,7 @@ function pfDatabase:GetQuestIDs(qid)
     end
   end
 
-  local tcount = 0
-  -- check if multiple quests share the same name
-  for id, data in pairs(pfDB["quests"]["loc"]) do
-    if quests[id] and data.T == title then
-      tcount = tcount + 1
-    end
-  end
+  local tcount = titleCandidates and table.getn(titleCandidates) or 0
 
   -- no title was found, run levenshtein on titles
   if tcount == 0 and title then
@@ -2152,13 +2175,16 @@ function pfDatabase:GetQuestIDs(qid)
     else
       -- set title to best result
       title = ttitle
+      titleCandidates = pfDatabase.nameIndex.quests and pfDatabase.nameIndex.quests[title]
+      tcount = titleCandidates and table.getn(titleCandidates) or 0
     end
   end
 
-  for id, data in pairs(pfDB["quests"]["loc"]) do
+  for _, id in pairs(titleCandidates or {}) do
+    local data = pfDB["quests"]["loc"][id]
     local score = 0
 
-    if quests[id] and data.T and data.T == title then
+    if quests[id] and data and data.T and data.T == title then
       -- low score for same name
       score = 1
 

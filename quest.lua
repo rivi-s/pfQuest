@@ -236,7 +236,11 @@ pfQuest:SetScript("OnUpdate", function()
     this.questRetry = nil
     local active = pfQuest.questlog[retry.questid]
     if active and active.qlogid == retry.qlogid and pfQuest_config["trackingmethod"] ~= 4 then
-      pfMap:DeleteNode("PFQUEST", retry.title)
+      -- This pass exists only because Turtle can publish a NEW quest before
+      -- its objectives are ready.  Keep the first successful render intact:
+      -- AddNode merges matching coordinates, while deleting here could erase
+      -- a valid objective set when the delayed payload is still incomplete.
+      -- Regular RELOAD events retain the full delete-and-rebuild behavior.
       local retryMaps = pfDatabase:SearchQuestID(retry.questid, { ["addon"] = "PFQUEST", ["qlogid"] = retry.qlogid })
       -- Current Zone Only normally receives entries while UpdateNodes walks
       -- rendered pins. Confirm the quest is truly in the log before adding a

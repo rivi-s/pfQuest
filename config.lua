@@ -316,6 +316,7 @@ local mapRefreshSettings = {
   spawncolors = true,
   mouseover = true,
   hideunexplored = true,
+  continentClickThrough = true,
 }
 
 function pfQuestConfig:LoadConfig()

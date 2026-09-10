@@ -1,5 +1,16 @@
 # pfQuest base patch notes
 
+## 8.0.21 — 2026-09-10
+
+- Reduced map refresh work and fixed active quest pins disappearing after a quest is accepted or availability changes.
+- Reduced same-title quest-chain lookup work; clients with optional ClassicAPI use its direct quest-link information while clean clients retain the compatible fallback.
+- Refined current-zone and unexplored-area filtering, including city visit tracking and city pins on parent outdoor maps.
+- Fixed Blackstone Island continent pin placement and map-pin tooltips.
+- Kept direct exploration checks limited to the map currently open, avoiding a continent-map hitch from scanning every zone.
+- Added Ctrl-click-through interaction for dense continent pin areas, so ordinary map clicks still open the intended zone.
+- Reduced continuous minimap marker work while moving, especially at wide zoom, and kept minimap objective markers visible while browsing another continent.
+
+
 ## 8.0.20 — 2026-09-09
 
 - Added Current Zone Only support for subareas and continent maps.

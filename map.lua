@@ -229,6 +229,11 @@ pfMap.tooltips = {}
 pfMap.nodes = {}
 pfMap.pins = {}
 pfMap.mpins = {}
+-- Minimap frames are retained by their node-table identity.  The old numeric
+-- pool reassigned every following frame when a quest completion removed one
+-- visible node, which made a small quest update rebuild a large marker set.
+-- Weak keys allow deleted node tables to be collected normally.
+pfMap.mpinNodeIndex = setmetatable({}, { __mode = "k" })
 pfMap.drawlayer = Minimap
 pfMap.unifiedcache = unifiedcache
 
@@ -566,6 +571,12 @@ function pfMap:GetMapID(cid, mid)
   cid = cid or GetCurrentMapContinent()
   mid = mid or GetCurrentMapZone()
 
+  -- Capital maps are not listed by GetMapZones in the 1.12 client. Prefer
+  -- ClassicAPI's direct area ID when available, then use the database name as
+  -- a clean-client fallback.
+  local apiMapID = pfQuestCompat.GetCurrentMapAreaID and pfQuestCompat.GetCurrentMapAreaID()
+  if apiMapID then return apiMapID end
+
   -- GetMapZones() should always return the same amount
   -- of zones for each continent, so we can cache it to
   -- avoid further creations of the same table.
@@ -576,6 +587,7 @@ function pfMap:GetMapID(cid, mid)
   local list = map_zone_cache[cid]
   local name = list[mid]
   local id = pfMap:GetMapIDByName(name)
+  id = id or pfMap:GetMapIDByName(GetMapInfo())
   id = id or customids[GetMapInfo()]
 
   return id
@@ -870,7 +882,7 @@ function pfMap:NodeEnter()
     WorldMapPOIFrame.allowBlobTooltip = false
   end
 
-  local tooltip = this:GetParent() == WorldMapButton and WorldMapTooltip or GameTooltip
+  local tooltip = this.worldmap and WorldMapTooltip or GameTooltip
   tooltip:SetOwner(this, "ANCHOR_LEFT")
   this.spawn = this.spawn or UNKNOWN
   tooltip:SetText(
@@ -915,13 +927,14 @@ function pfMap:NodeLeave()
     WorldMapPOIFrame.allowBlobTooltip = true
   end
 
-  local tooltip = this:GetParent() == WorldMapButton and WorldMapTooltip or GameTooltip
+  local tooltip = this.worldmap and WorldMapTooltip or GameTooltip
   tooltip:Hide()
   pfMap.highlight = nil
 end
 
 function pfMap:BuildNode(name, parent)
   local f = CreateFrame("Button", name, parent)
+  f.worldmap = parent == WorldMapButton
 
   if parent == WorldMapButton then
     f.defalpha = tonumber(pfQuest_config["worldmaptransp"]) or 1
@@ -1064,7 +1077,10 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
   end
 
   if frame.updateLayer then
-    frame:SetFrameLevel((obj == "minimap" and 4 or 112) + frame.layer)
+    -- City maps such as Ironforge draw their detailed map artwork above the
+    -- normal outdoor-map pin layer. Keep world-map pins above that artwork;
+    -- minimap pins retain their existing compact layer range.
+    frame:SetFrameLevel((obj == "minimap" and 4 or 240) + frame.layer)
   end
 
   if frame.updateTexture or frame.updateVertex or frame.updateColor or frame.updateLayer then
@@ -1093,7 +1109,50 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
   frame.node = node
 end
 
-local function GetExploredBounds()
+local function GetExploredBounds(mapid)
+  -- ClassicAPI reads fog data for any zone by ID. This makes the unexplored
+  -- filter immediately accurate on continent maps without calling SetMapZoom
+  -- or disturbing the map a player is viewing.
+  local apiOverlays = pfQuestCompat.GetExploredMapTextures and pfQuestCompat.GetExploredMapTextures(mapid)
+  if apiOverlays then
+    -- Capitals and a few special maps have no exploration-overlay geometry at
+    -- all. They are fully readable map art, not an unexplored blank area, so
+    -- leave their quest pins alone.
+    local allOverlays = C_Map and type(C_Map.GetMapOverlays) == "function"
+      and C_Map.GetMapOverlays(mapid)
+    if type(allOverlays) ~= "table" then return nil end
+    if type(allOverlays) == "table" and table.getn(allOverlays) == 0 then return nil, true end
+
+    -- Overlay rectangles use the fixed 1002x668 World Map canvas, rather
+    -- than C_Map.GetMapWorldSize's yard coordinates.
+    local bounds = {}
+    for _, overlay in ipairs(apiOverlays) do
+      -- The art rectangle often contains transparent padding. ClassicAPI's
+      -- hit rect follows the actual clickable landmass and avoids allowing
+      -- pins at the loose edges of an otherwise explored overlay.
+      if overlay.hitRectLeft and overlay.hitRectRight and overlay.hitRectTop and overlay.hitRectBottom then
+        table.insert(bounds, {
+          left = overlay.hitRectLeft / 1002 * 100,
+          right = overlay.hitRectRight / 1002 * 100,
+          top = overlay.hitRectTop / 668 * 100,
+          bottom = overlay.hitRectBottom / 668 * 100,
+        })
+      else
+        local width, height = overlay.textureWidth, overlay.textureHeight
+        local offsetX, offsetY = overlay.offsetX, overlay.offsetY
+        if width and height and offsetX and offsetY then
+          table.insert(bounds, {
+            left = offsetX / 1002 * 100,
+            right = (offsetX + width) / 1002 * 100,
+            top = offsetY / 668 * 100,
+            bottom = (offsetY + height) / 668 * 100,
+          })
+        end
+      end
+    end
+    return bounds, true
+  end
+
   if not GetNumMapOverlays or not GetMapOverlayInfo or not GetMapInfo then return nil end
 
   local _, mapHeight, mapWidth = GetMapInfo()
@@ -1111,8 +1170,16 @@ local function GetExploredBounds()
       })
     end
   end
+  -- Vanilla can report zero overlays while a map is still initializing. An
+  -- empty result is not evidence that every coordinate is unexplored; keep
+  -- pins visible until it supplies actual explored rectangles.
+  if table.getn(bounds) == 0 then return nil end
   return bounds
 end
+
+-- pfQuest-turtle uses this for projected continent pins. Its callers only use
+-- the direct form when ClassicAPI advertises map-exploration support.
+pfMap.GetExploredBounds = GetExploredBounds
 
 local function IsExploredPosition(bounds, x, y)
   if not bounds then return true end
@@ -1131,17 +1198,68 @@ end
 -- ourselves: each zone enters this cache only after the player has opened it.
 pfQuest_config.exploredareas = pfQuest_config.exploredareas or {}
 pfMap.exploredAreas = pfQuest_config.exploredareas
+-- Older builds could save an empty table when vanilla had not populated map
+-- overlays yet. That means "unknown", never "nothing explored"; remove such
+-- stale records once so they cannot keep hiding an entire zone after upgrade.
+for mapID, bounds in pairs(pfMap.exploredAreas) do
+  if type(bounds) ~= "table" or not next(bounds) then
+    pfMap.exploredAreas[mapID] = nil
+  end
+end
+pfQuest_config.visitedmaps = pfQuest_config.visitedmaps or {}
+pfMap.visitedMaps = pfQuest_config.visitedmaps
 pfMap.IsExploredPosition = IsExploredPosition
 
+-- Capital maps do not have meaningful regional fog for quest filtering. Some
+-- clients still expose decorative overlay rows for them, so use the character
+-- visit record rather than interpreting those rows as unexplored terrain.
+local cityMaps = {
+  [1497] = true, -- Undercity
+  [1519] = true, -- Stormwind City
+  [1537] = true, -- Ironforge
+  [1637] = true, -- Orgrimmar
+  [1638] = true, -- Thunder Bluff
+  [1657] = true, -- Darnassus
+}
+
+function pfMap:IsMapVisited(mapID)
+  return mapID and self.visitedMaps[mapID] and true or false
+end
+
+function pfMap:MarkMapVisited(mapID)
+  if mapID then self.visitedMaps[mapID] = true end
+end
+
+function pfMap:IsVisitedCityPosition(mapID, x, y)
+  for cityMapID in pairs(cityMaps) do
+    if self:IsMapVisited(cityMapID) then
+      local left, right, top, bottom = pfQuestCompat.GetMapRectOnMap
+        and pfQuestCompat.GetMapRectOnMap(cityMapID, mapID)
+      if left and right and top and bottom
+        and x >= left * 100 and x <= right * 100
+        and y >= top * 100 and y <= bottom * 100 then
+        return true
+      end
+    end
+  end
+  return false
+end
+
 function pfMap:GetPlayerMapID()
-  -- GetRealZoneText is independent of whichever map the player is browsing.
-  -- It also resolves sub-areas to their real parent zone map.
-  local mapID = GetRealZoneText and pfMap:GetMapIDByName(GetRealZoneText())
-  return mapID or pfMap.playerMapID
+  -- SetMapToCurrentZone resolves capitals (for example Orgrimmar) correctly,
+  -- while GetRealZoneText can report their surrounding outdoor zone (Durotar).
+  -- Prefer the ID captured on the player's actual zone-change event so Current
+  -- Zone Only follows the same map the client uses for the character.
+  if pfMap.playerMapID then
+    return pfMap.playerMapID
+  end
+
+  -- Fallback for the short period before the first zone-change event fires.
+  return GetRealZoneText and pfMap:GetMapIDByName(GetRealZoneText()) or nil
 end
 
 function pfMap:CacheCurrentExploration(mapID)
-  local bounds = GetExploredBounds()
+  local bounds = GetExploredBounds(mapID)
   if mapID and bounds then
     self.exploredAreas[mapID] = bounds
   end
@@ -1183,7 +1301,14 @@ function pfMap:UpdateNodes()
     return
   end
 
-  local exploredBounds = GetExploredBounds()
+  local exploredBounds, explorationHandled = GetExploredBounds(map)
+  if cityMaps[map] then
+    if pfMap:IsMapVisited(map) then
+      exploredBounds, explorationHandled = nil, nil
+    else
+      exploredBounds, explorationHandled = {}, true
+    end
+  end
   if exploredBounds then
     pfMap:CacheCurrentExploration(map)
   end
@@ -1230,11 +1355,24 @@ function pfMap:UpdateNodes()
   -- is resized between calls the new values will invalidate cached px/py.
   local mapW = WorldMapButton:GetWidth()
   local mapH = WorldMapButton:GetHeight()
+  -- The enhanced client renders certain capital-city maps on DetailFrame and
+  -- hides WorldMapButton. Pins parented to the hidden button still receive
+  -- valid coordinates but can never be drawn. Use the visible detail surface
+  -- in that case, then return to WorldMapButton for ordinary outdoor maps.
+  local mapParent = WorldMapButton
+  if not WorldMapButton:IsVisible() and WorldMapDetailFrame and WorldMapDetailFrame:IsVisible() then
+    mapParent = WorldMapDetailFrame
+  end
   for addon, _ in pairs(pfMap.nodes) do
     if pfMap.nodes[addon][map] then
       for coords, node in pairs(pfMap.nodes[addon][map]) do
         if not pfMap.pins[i] then
           pfMap.pins[i] = pfMap:BuildNode("pfMapPin" .. i, WorldMapButton)
+        end
+        if pfMap.pins[i]:GetParent() ~= mapParent then
+          pfMap.pins[i]:SetParent(mapParent)
+          pfMap.pins[i].lastX = nil
+          pfMap.pins[i].lastY = nil
         end
 
         -- skip UpdateNode if this pin is already bound to this exact node table
@@ -1258,16 +1396,15 @@ function pfMap:UpdateNodes()
           coord_cache[coords] = { x, y }
         end
 
-        -- write points to the route plan
-        if
+        -- Route eligibility is determined here, but the point is only added
+        -- after the final map-visibility checks below. Otherwise the route
+        -- can lead to an objective that is hidden by fog or a display filter.
+        local routeEligible =
           (pfQuest_config["routecluster"] == "1" and pfMap.pins[i].layer >= 9)
           or (pfQuest_config["routeender"] == "1" and pfMap.pins[i].layer == 4)
           or (pfQuest_config["routestarter"] == "1" and pfMap.pins[i].layer == 1 and pfMap.pins[i].texture)
           or (pfQuest_config["routestarter"] == "1" and pfMap.pins[i].layer == 2)
           or pfMap.pins[i].arrow == true
-        then
-          pfQuest.route:AddPoint({ x, y, pfMap.pins[i] })
-        end
 
         -- Populate the tracker even when the matching map pin is hidden by a
         -- display preference. Hidden objective spawns are still active quests
@@ -1277,7 +1414,10 @@ function pfMap:UpdateNodes()
         end
 
         -- Hide pfQuest pins outside the character's discovered map overlays.
-        if addon == "PFQUEST" and pfQuest_config["hideunexplored"] == "1" and not IsExploredPosition(exploredBounds, x, y) then
+        if addon == "PFQUEST" and pfQuest_config["hideunexplored"] == "1"
+          and ((explorationHandled and not exploredBounds and not pfMap:IsMapVisited(map))
+            or not IsExploredPosition(exploredBounds, x, y))
+          and not pfMap:IsVisitedCityPosition(map, x, y) then
           pfMap.pins[i]:Hide()
         -- hide cluster nodes if set
         elseif pfQuest_config["showcluster"] == "0" and pfMap.pins[i].cluster then
@@ -1295,10 +1435,13 @@ function pfMap:UpdateNodes()
             pfMap.pins[i].lastX = px
             pfMap.pins[i].lastY = py
             pfMap.pins[i]:ClearAllPoints()
-            pfMap.pins[i]:SetPoint("CENTER", WorldMapButton, "TOPLEFT", px, -py)
+            pfMap.pins[i]:SetPoint("CENTER", mapParent, "TOPLEFT", px, -py)
           end
 
           pfMap.pins[i]:Show()
+          if routeEligible then
+            pfQuest.route:AddPoint({ x, y, pfMap.pins[i] })
+          end
         end
 
         n_pins = n_pins + 1
@@ -1338,7 +1481,11 @@ function pfMap:UpdateMinimap()
   -- Player movement changes every frame, which used to reposition every nearby
   -- minimap pin up to 20 times per second. That is needless while the world
   -- map is open and expensive in dense zones.
-  local interval = WorldMapFrame:IsShown() and 0.4 or 0.15
+  local mZoom = pfMap.drawlayer:GetZoom()
+  -- Wide minimap levels can display a large number of quest markers. Their
+  -- lower apparent movement supports a slower refresh without looking stale;
+  -- closer views retain the responsive 250 ms cadence.
+  local interval = WorldMapFrame:IsShown() and 0.4 or (mZoom <= 1 and 0.5 or 0.25)
   if (this.minimapTick or 0) > GetTime() then
     return
   end
@@ -1355,16 +1502,35 @@ function pfMap:UpdateMinimap()
     return
   end
 
-  -- hide nodes and skip further processing in dungeons
-  local xPlayer, yPlayer = GetPlayerMapPosition("player")
+  -- The 1.12 API reports the player in the coordinates of whichever World Map
+  -- view is currently selected. While a continent map is open that is not the
+  -- player's zone, so use the last real-zone position for minimap placement.
+  -- It is refreshed continuously whenever the World Map is closed.
+  local xPlayer, yPlayer
+  if WorldMapFrame:IsShown() then
+    xPlayer, yPlayer = pfMap.minimapPlayerX, pfMap.minimapPlayerY
+  else
+    xPlayer, yPlayer = GetPlayerMapPosition("player")
+    if xPlayer and yPlayer and not (xPlayer == 0 and yPlayer == 0) then
+      pfMap.minimapPlayerX, pfMap.minimapPlayerY = xPlayer, yPlayer
+      -- The World Map changes the active map context, including on the
+      -- opposite continent. Retain the player's actual map ID with the
+      -- coordinates so minimap nodes continue to use the real zone.
+      pfMap.minimapMapID = pfMap.playerMapID
+        or pfMap:GetMapIDByName(GetRealZoneText())
+    end
+  end
+
+  -- hide nodes and skip further processing in dungeons or before a usable
+  -- real-zone position has been captured.
   if xPlayer == 0 and yPlayer == 0 then
     for pins, pin in pairs(pfMap.mpins) do
       pin:Hide()
     end
     return
   end
+  if not xPlayer or not yPlayer then return end
 
-  local mZoom = pfMap.drawlayer:GetZoom()
   xPlayer, yPlayer = xPlayer * 100, yPlayer * 100
 
   -- force refresh every second even without changed values, otherwise skip
@@ -1378,7 +1544,8 @@ function pfMap:UpdateMinimap()
 
   this.xPlayer, this.yPlayer, this.mZoom = xPlayer, yPlayer, mZoom
   local color = pfQuest_config["spawncolors"] == "1" and "spawn" or "title"
-  local mapID = pfMap:GetMapIDByName(GetRealZoneText())
+  local mapID = WorldMapFrame:IsShown() and pfMap.minimapMapID
+    or pfMap:GetMapIDByName(GetRealZoneText())
   local mapZoom = minimap_zoom[minimap_indoor()][mZoom]
   local mapWidth = minimap_sizes[mapID] and minimap_sizes[mapID][1] or 0
   local mapHeight = minimap_sizes[mapID] and minimap_sizes[mapID][2] or 0
@@ -1389,7 +1556,46 @@ function pfMap:UpdateMinimap()
   local xDraw = pfMap.drawlayer:GetWidth() / xScale / 100
   local yDraw = pfMap.drawlayer:GetHeight() / yScale / 100
 
-  local i = 1
+  -- At a zoomed-out minimap scale, ordinary movement often shifts every pin
+  -- by less than a screen pixel. Keep the last layout until that shift is
+  -- visible (or the next scheduled refresh has elapsed), rather than
+  -- re-anchoring a large visible marker set on every polling interval.
+  local anchorX, anchorY = xPlayer * xDraw, yPlayer * yDraw
+  if this.minimapAnchorX and math.abs(anchorX - this.minimapAnchorX) < 1
+    and math.abs(anchorY - this.minimapAnchorY) < 1
+    and (this.minimapAnchorAt or 0) + interval > GetTime() then
+    return
+  end
+  this.minimapAnchorX, this.minimapAnchorY = anchorX, anchorY
+  this.minimapAnchorAt = GetTime()
+
+  -- Keep marker coordinates in a shared moving layer. Player movement now
+  -- moves this one layer instead of ClearAllPoints/SetPoint on every visible
+  -- minimap pin, which is vital when a zoomed-out map has many quest spawns.
+  local minimapLayer = pfMap.minimapLayer
+  if not minimapLayer then
+    minimapLayer = CreateFrame("Frame", nil, pfMap.drawlayer)
+    minimapLayer:SetFrameStrata(pfMap.drawlayer:GetFrameStrata())
+    pfMap.minimapLayer = minimapLayer
+  end
+  minimapLayer:SetWidth(pfMap.drawlayer:GetWidth())
+  minimapLayer:SetHeight(pfMap.drawlayer:GetHeight())
+  minimapLayer:ClearAllPoints()
+  minimapLayer:SetPoint("CENTER", pfMap.drawlayer, "CENTER", -anchorX, anchorY)
+
+  -- Nodes outside the minimap cannot be seen. Updating their anchors every
+  -- time the player moves is especially expensive in dense quest zones, so
+  -- cull them before texture or layout work. Keep a small margin for icons
+  -- entering from the edge.
+  local visibleHalfWidth = pfMap.drawlayer:GetWidth() / 2 + 24
+  local visibleHalfHeight = pfMap.drawlayer:GetHeight() / 2 + 24
+
+  -- Mark visible pins for this pass. A separate node-to-pin index prevents a
+  -- removal from shifting and rebuilding every later visual pin.
+  for _, pin in pairs(pfMap.mpins) do
+    pin.minimapUsed = nil
+  end
+  local freePin = 1
 
   -- refresh all nodes
   for addon, data in pairs(pfMap.nodes) do
@@ -1418,6 +1624,14 @@ function pfMap:UpdateMinimap()
           yPos = -((-dx * sinFacing) + (dy * cosFacing))
         end
 
+        local isVisible = math.abs(xPos) <= visibleHalfWidth
+          and math.abs(yPos) <= visibleHalfHeight
+
+        if not isVisible then
+          -- Keep the visible-pin pool compact; remaining old pins are hidden
+          -- together after the scan.
+        else
+
         local display = nil
         local distance = sqrt(xPos * xPos + yPos * yPos)
 
@@ -1430,59 +1644,138 @@ function pfMap:UpdateMinimap()
         end
 
         if display then
-          if not pfMap.mpins[i] then
-            pfMap.mpins[i] = pfMap:BuildNode(nodename .. i, pfMap.drawlayer)
+          local pin = pfMap.mpinNodeIndex[node]
+          if not pin or pin.minimapUsed then
+            while pfMap.mpins[freePin] and pfMap.mpins[freePin].minimapUsed do
+              freePin = freePin + 1
+            end
+            pin = pfMap.mpins[freePin]
+            if not pin then
+              pin = pfMap:BuildNode(nodename .. freePin, pfMap.drawlayer)
+              pfMap.mpins[freePin] = pin
+            elseif pin.node then
+              pfMap.mpinNodeIndex[pin.node] = nil
+            end
+            pfMap.mpinNodeIndex[node] = pin
+            -- Force one visual update when this reusable frame changes owner.
+            pin.node = nil
+            freePin = freePin + 1
+          end
+          pin.minimapUsed = true
+
+          if pin:GetParent() ~= minimapLayer then
+            pin:SetParent(minimapLayer)
+            pin.minimapX = nil
+            pin.minimapY = nil
           end
 
           -- skip expensive UpdateNode work (highlightdb rebuild, node iteration,
           -- size calls) when this pin is already showing the correct node and
           -- nothing has been added or removed from it since the last render.
-          if pfMap.mpins[i].node ~= node or pfMap.dirtyNodes[node] then
-            pfMap:UpdateNode(pfMap.mpins[i], node, color, "minimap", distance)
+          if pin.node ~= node or pfMap.dirtyNodes[node] then
+            pfMap:UpdateNode(pin, node, color, "minimap", distance)
             pfMap.dirtyNodes[node] = nil
           end
 
-          pfMap.mpins[i].hl:Hide()
-
-          if pfQuest_config["showclustermini"] == "0" and pfMap.mpins[i].cluster then
-            pfMap.mpins[i]:Hide()
-          elseif pfQuest_config["showspawnmini"] == "0" and addon == "PFQUEST" and not pfMap.mpins[i].texture then
-            pfMap.mpins[i]:Hide()
-          else
-            pfMap.mpins[i]:ClearAllPoints()
-            pfMap.mpins[i]:SetPoint("CENTER", pfMap.drawlayer, "CENTER", xPos, -yPos)
-            pfMap.mpins[i]:Show()
+          if pin.hl:IsShown() then
+            pin.hl:Hide()
           end
 
-          i = i + 1
+          if pfQuest_config["showclustermini"] == "0" and pin.cluster then
+            if pin:IsShown() then pin:Hide() end
+          elseif pfQuest_config["showspawnmini"] == "0" and addon == "PFQUEST" and not pin.texture then
+            if pin:IsShown() then pin:Hide() end
+          else
+            -- Anchor against absolute map coordinates. The shared layer above
+            -- supplies the player-position offset, so walking does not touch
+            -- this pin's anchors.
+            if pin.minimapX ~= x or pin.minimapY ~= y
+              or pin.minimapXDraw ~= xDraw or pin.minimapYDraw ~= yDraw then
+              pin.minimapX = x
+              pin.minimapY = y
+              pin.minimapXDraw = xDraw
+              pin.minimapYDraw = yDraw
+              pin:ClearAllPoints()
+              pin:SetPoint("CENTER", minimapLayer, "CENTER", x * xDraw, -y * yDraw)
+            end
+            if not pin:IsShown() then
+              pin:Show()
+            end
+          end
+        end
         end
       end
     end
   end
 
   -- hide remaining pins
-  for j = i, table.getn(pfMap.mpins) do
-    if pfMap.mpins[j] then
-      pfMap.mpins[j]:Hide()
+  for _, pin in pairs(pfMap.mpins) do
+    if not pin.minimapUsed and pin:IsShown() then
+      pin:Hide()
     end
   end
 end
 
 local zone
+local function CapturePlayerMapID()
+  -- SetMapToCurrentZone gives city maps their own ID. Keep this independent of
+  -- the map currently selected by the player in the World Map window.
+  if WorldMapFrame:IsShown() then
+    -- Do not change a map the player is browsing, but real-zone text remains
+    -- safe to read and lets us retain capital visits made with the map open.
+    if GetRealZoneText then
+      pfMap:MarkMapVisited(pfMap:GetMapIDByName(GetRealZoneText()))
+    end
+    return
+  end
+
+  -- MINIMAP_ZONE_CHANGED also fires while moving between named subareas in a
+  -- city. If the real map has not changed, calling SetMapToCurrentZone again
+  -- creates a WORLD_MAP_UPDATE burst and rebuilds the map for no benefit.
+  -- Keep the existing map ID in that common movement path.
+  local realMapID = GetRealZoneText and pfMap:GetMapIDByName(GetRealZoneText())
+  if realMapID and pfMap.playerMapID == realMapID then
+    pfMap:MarkMapVisited(realMapID)
+    return
+  end
+
+  SetMapToCurrentZone()
+  pfMap.playerMapID = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+    or (GetRealZoneText and pfMap:GetMapIDByName(GetRealZoneText()))
+  pfMap:MarkMapVisited(pfMap.playerMapID)
+  -- Some clients draw a capital as its surrounding zone map, but still report
+  -- the capital's real zone text. Preserve that city visit as well.
+  if GetRealZoneText then
+    pfMap:MarkMapVisited(pfMap:GetMapIDByName(GetRealZoneText()))
+  end
+end
+
+pfMap:RegisterEvent("PLAYER_LOGIN")
 pfMap:RegisterEvent("ZONE_CHANGED")
 pfMap:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 pfMap:RegisterEvent("MINIMAP_ZONE_CHANGED")
 pfMap:RegisterEvent("WORLD_MAP_UPDATE")
 pfMap:SetScript("OnEvent", function()
+  -- Darnassus and other dense cities can emit MINIMAP_ZONE_CHANGED repeatedly
+  -- while the player moves. Once the real map is known, do not even query map
+  -- state for those cosmetic subarea notifications.
+  if event == "MINIMAP_ZONE_CHANGED" and pfMap.playerMapID then
+    return
+  end
+
   -- save current zone
   zone = GetCurrentMapZone()
 
   -- set map to current zone when possible
-  if event == "ZONE_CHANGED" or event == "MINIMAP_ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" then
-    if not WorldMapFrame:IsShown() then
-      SetMapToCurrentZone()
-      pfMap.playerMapID = pfMap:GetPlayerMapID() or pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
-    end
+  if event == "PLAYER_LOGIN" or event == "ZONE_CHANGED" or event == "ZONE_CHANGED_NEW_AREA" then
+    -- Read the map immediately after SetMapToCurrentZone. This preserves a
+    -- capital's own map ID rather than replacing it with its parent zone.
+    CapturePlayerMapID()
+  elseif event == "MINIMAP_ZONE_CHANGED" and not pfMap.playerMapID then
+    -- This event can fire repeatedly while walking through named subareas.
+    -- It is only useful before the initial player map has been established;
+    -- real zone transitions emit the zone-change events above.
+    CapturePlayerMapID()
   end
 
   -- update nodes on world map changes.
@@ -1511,7 +1804,10 @@ pfMap:SetScript("OnEvent", function()
       end
       pfMap.lastUpdateZone = nil
     elseif pfMap.mapJustOpened then
-      -- map just opened: debounce the burst, clear flag once settled
+      -- Map opens and map selections emit a short event burst. Render after
+      -- the normal settle period. Even enhanced clients emit a burst while
+      -- the map view changes. Ordinary
+      -- filter and quest-data updates retain the full debounce below.
       pfMap.queue_update = GetTime()
     elseif newzone ~= pfMap.lastUpdateZone then
       -- deliberate zone change: update immediately, no debounce
@@ -1578,6 +1874,13 @@ pfMap:SetScript("OnUpdate", function()
     local map = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
     if WorldMapFrame:IsShown() and map == pfMap.explorationCacheMap then
       pfMap:CacheCurrentExploration(map)
+      -- Map overlays arrive after the initial WORLD_MAP_UPDATE on many maps.
+      -- The first render may therefore have treated every pin as unexplored.
+      -- Rebuild once the client has populated its fog data so the display and
+      -- saved cache use the same bounds.
+      if pfQuest_config["hideunexplored"] == "1" then
+        pfMap.queue_update = GetTime()
+      end
     end
     pfMap.explorationCacheMap = nil
     pfMap.explorationCacheAt = nil
