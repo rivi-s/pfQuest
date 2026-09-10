@@ -23,6 +23,8 @@ Install pfQuest Turtle alongside pfQuest if you play Turtle WoW. It adds:
 - Auto-questing: accept, complete, turn in, and collect no-choice rewards
 - Optional low-level quest skipping and runecloth-donation automation
 
+pfQuest Turtle also works on a clean 1.12 client.
+
 Without pfQuest Turtle, pfQuest still works, but Turtle-specific quest content and auto-questing are unavailable.
 
 ## Optional: ClassicAPI
