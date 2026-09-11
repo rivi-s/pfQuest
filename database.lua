@@ -2054,6 +2054,36 @@ function pfDatabase:FormatQuestText(questText)
   return string.gsub(questText, "($[Gg])([^:]+):([^;]+);", "%" .. UnitSex("player"))
 end
 
+-- Remember collapsed quest-log headers before a legacy selection fallback.
+-- Selecting a hidden row expands its category on 1.12 clients, and the native
+-- UI leaves that category open after the selection is restored.
+local function CaptureCollapsedQuestHeaders()
+  if not CollapseQuestHeader then return nil end
+
+  local collapsed = {}
+  local total = GetNumQuestLogEntries()
+  for index = 1, total do
+    local title, _, _, isHeader, isCollapsed = compat.GetQuestLogTitle(index)
+    if title and isHeader and (isCollapsed == true or isCollapsed == 1) then
+      collapsed[title] = true
+    end
+  end
+  return collapsed
+end
+
+local function RestoreCollapsedQuestHeaders(collapsed)
+  if not collapsed or not CollapseQuestHeader then return end
+
+  -- Work upward: collapsing a header changes the rows after it, but not the
+  -- indices of headers above it.
+  for index = GetNumQuestLogEntries(), 1, -1 do
+    local title, _, _, isHeader, isCollapsed = compat.GetQuestLogTitle(index)
+    if title and isHeader and collapsed[title] and not (isCollapsed == true or isCollapsed == 1) then
+      CollapseQuestHeader(index)
+    end
+  end
+end
+
 -- GetQuestIDs
 -- Try to guess the quest ID based on the questlog ID
 -- Returns possible quest IDs
@@ -2098,9 +2128,11 @@ function pfDatabase:GetQuestIDs(qid)
   end
 
   local oldID = GetQuestLogSelection()
+  local collapsedHeaders = CaptureCollapsedQuestHeaders()
   SelectQuestLogEntry(qid)
   local text, objective = GetQuestLogQuestText()
   SelectQuestLogEntry(oldID)
+  RestoreCollapsedQuestHeaders(collapsedHeaders)
   -- Version this key when resolver rules change so stale same-title matches
   -- do not keep bypassing the improved live-objective disambiguation.
   local identifier = "objective-v4:" .. title .. ":" .. (level or "") .. ":" .. (objective or "") .. ":" .. (text or "")
