@@ -52,6 +52,7 @@ SlashCmdList["PFDB"] = function(input, editbox)
     DEFAULT_CHAT_FRAME:AddMessage(
       "|cff33ffcc/db|cffffffff query |cffcccccc - " .. pfQuest_Loc["Query the server for completed quests"]
     )
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffcc/db|cffffffff version |cffcccccc - Show loaded pfQuest versions")
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ffcc/db|cffffffff api |cffcccccc - Show optional API support")
     return
   end
@@ -72,6 +73,17 @@ SlashCmdList["PFDB"] = function(input, editbox)
     arg2parts[i - 1] = commandlist[i]
   end
   local arg2 = concat(arg2parts, " ")
+
+  -- argument: version
+  if arg1 == "version" then
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpf|cffffffffQuest base: |cff66ccffv" .. tostring(pfQuestConfig.version or "unknown") .. "|r")
+
+    if pfDB and pfDB["quests"] and pfDB["quests"]["data-turtle"] then
+      local turtleVersion = GetAddOnMetadata("pfQuest-turtle", "Version") or "unknown"
+      DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpf|cffffffffQuest Turtle: |cff66ccffv" .. tostring(turtleVersion) .. "|r")
+    end
+    return
+  end
 
   -- argument: api
   if arg1 == "api" then

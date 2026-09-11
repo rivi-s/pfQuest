@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.23 — 2026-09-11
+
+- Added `/db version`, which reports the loaded pfQuest base version and Turtle extension version when installed.
+
 ## 8.0.22 — 2026-09-11
 
 - Added Smooth, Balanced, and Performance minimap marker refresh modes. Smooth is now the default and preserves the original responsive movement; the other modes reduce work in dense areas.
