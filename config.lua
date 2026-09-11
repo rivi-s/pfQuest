@@ -87,6 +87,31 @@ local function OpenDatabaseURL()
   StaticPopup_Show("PFQUEST_DBURL")
 end
 
+local minimapRefreshMenu
+local function OpenMinimapRefreshSelector()
+  if not minimapRefreshMenu then
+    minimapRefreshMenu = CreateFrame("Frame", "pfQuestMinimapRefreshMenu", UIParent, "UIDropDownMenuTemplate")
+    UIDropDownMenu_Initialize(minimapRefreshMenu, function()
+      for _, mode in ipairs({ "smooth", "balanced", "performance" }) do
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = mode:gsub("^%l", string.upper)
+        info.value = mode
+        info.checked = pfQuest_config["minimaprefresh"] == mode
+        info.func = function()
+          pfQuest_config["minimaprefresh"] = this.value
+          if pfMap then
+            pfMap.minimapTick = nil
+            pfMap.minimapAnchorAt = nil
+            pfMap:UpdateMinimap()
+          end
+        end
+        UIDropDownMenu_AddButton(info)
+      end
+    end)
+  end
+  ToggleDropDownMenu(1, nil, minimapRefreshMenu, this, 0, 0)
+end
+
 -- default config
 pfQuest_defconfig = {
   { -- 1: All Quests; 2: Tracked; 3: Manual; 4: Hide; 5: Current Zone Only
@@ -133,6 +158,7 @@ pfQuest_defconfig = {
 
   { text = L["Map & Minimap"], default = nil, type = "header" },
   { text = L["Enable Minimap Nodes"], default = "1", type = "checkbox", config = "minimapnodes" },
+  { text = "Minimap Marker Refresh", default = "smooth", type = "button", func = OpenMinimapRefreshSelector },
   { text = L["Use Icons For Tracking Nodes"], default = "1", type = "checkbox", config = "trackingicons" },
   { text = L["Use Monochrome Cluster Icons"], default = "0", type = "checkbox", config = "clustermono" },
   { text = L["Use Cut-Out Minimap Node Icons"], default = "1", type = "checkbox", config = "cutoutminimap" },
@@ -328,6 +354,9 @@ function pfQuestConfig:LoadConfig()
       pfQuest_config[data.config] = data.default
     end
   end
+  local mode = pfQuest_config["minimaprefresh"] or "smooth"
+  if mode ~= "smooth" and mode ~= "balanced" and mode ~= "performance" then mode = "smooth" end
+  pfQuest_config["minimaprefresh"] = mode
 end
 
 function pfQuestConfig:MigrateHistory()
@@ -541,8 +570,9 @@ function pfQuestConfig:UpdateConfigEntries()
   for _, data in pairs(pfQuest_defconfig) do
     if data.type and configframes[data.text] then
       if data.type == "checkbox" then
-        local checked = pfQuest_config[data.config] == "1"
-        configframes[data.text].input.lastVisualValue = pfQuest_config[data.config]
+        local value = pfQuest_config[data.config]
+        local checked = value == "1"
+        configframes[data.text].input.lastVisualValue = value
         SetCheckboxVisual(configframes[data.text].input, checked)
       elseif data.type == "text" then
         local saved = data.globalconfig and pfQuest_global or pfQuest_config

@@ -1478,14 +1478,18 @@ function pfMap:UpdateMinimap()
     return
   end
 
-  -- Player movement changes every frame, which used to reposition every nearby
-  -- minimap pin up to 20 times per second. That is needless while the world
-  -- map is open and expensive in dense zones.
+  -- Smooth preserves the original high-end behavior. The other modes reduce
+  -- repeated pin placement in dense areas, especially at wide minimap zoom.
   local mZoom = pfMap.drawlayer:GetZoom()
-  -- Wide minimap levels can display a large number of quest markers. Their
-  -- lower apparent movement supports a slower refresh without looking stale;
-  -- closer views retain the responsive 250 ms cadence.
-  local interval = WorldMapFrame:IsShown() and 0.4 or (mZoom <= 1 and 0.5 or 0.25)
+  local refreshMode = pfQuest_config["minimaprefresh"] or "smooth"
+  local interval
+  if refreshMode == "performance" then
+    interval = WorldMapFrame:IsShown() and 0.6 or (mZoom <= 1 and 0.75 or 0.4)
+  elseif refreshMode == "balanced" then
+    interval = WorldMapFrame:IsShown() and 0.4 or (mZoom <= 1 and 0.5 or 0.25)
+  else
+    interval = 0
+  end
   if (this.minimapTick or 0) > GetTime() then
     return
   end

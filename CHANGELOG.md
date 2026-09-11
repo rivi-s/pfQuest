@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.22 — 2026-09-11
+
+- Added Smooth, Balanced, and Performance minimap marker refresh modes. Smooth is now the default and preserves the original responsive movement; the other modes reduce work in dense areas.
+- Preserved collapsed Quest Log headers while quest progress updates, so collapsed sections stay closed until the player reopens them.
+
 ## 8.0.21 — 2026-09-10
 
 - Reduced map refresh work and fixed active quest pins disappearing after a quest is accepted or availability changes.

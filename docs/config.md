@@ -33,6 +33,10 @@ Default=1
 If selected, minimap nodes will be shown.  
 Default=1
 
+## ["minimaprefresh"]
+Controls how often minimap markers reposition while moving. `smooth` preserves the original high-refresh behavior and is the default. `balanced` reduces updates at wider zoom levels. `performance` reduces them further for dense areas or lower-end hardware.
+Default="smooth"
+
 ## ["questlogbuttons"]
 If selected, buttons will be shown in the questlog to show, clean and reset the nodes.  
 Default=1
