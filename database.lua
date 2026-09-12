@@ -1459,12 +1459,12 @@ end
 -- Scans for all items with a specified name
 -- Adds map nodes for each vendor
 -- Returns its map table
-function pfDatabase:SearchVendor(item, meta)
+function pfDatabase:SearchVendor(item, meta, partial)
   local maps = {}
   local meta = meta or {}
   local bestmap, bestscore = nil, 0
 
-  for id in pairs(pfDatabase:GetIDByName(item, "items")) do
+  for id in pairs(pfDatabase:GetIDByName(item, "items", partial)) do
     meta["itemid"] = id
     meta["item"] = pfDB.items.loc[id]
 
