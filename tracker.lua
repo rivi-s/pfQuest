@@ -114,10 +114,15 @@ local function UpdateQuestDistances()
 
   local changed, nearestByTitle = nil, {}
   for _, data in ipairs((pfQuest.route and pfQuest.route.coords) or {}) do
-    local node, distance = data[3], data[4]
-    local title = node and node.title
-    if title and distance and (not nearestByTitle[title] or distance < nearestByTitle[title]) then
-      nearestByTitle[title] = distance
+    local pin, distance = data[3], data[4]
+    -- A route point is a map-pin frame. Its node holds one or more quest
+    -- entries keyed by quest title, rather than a single node.title field.
+    if pin and pin.node and distance then
+      for title in pairs(pin.node) do
+        if not nearestByTitle[title] or distance < nearestByTitle[title] then
+          nearestByTitle[title] = distance
+        end
+      end
     end
   end
 
