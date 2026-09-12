@@ -19,6 +19,50 @@ pfQuest_global = pfQuest_global or {}
 
 pfQuest.defaultdburl = "https://database.ravencraft.io/?quest="
 
+-- The Quest Log's Show button should lead to the quest hub when one is
+-- known. Objective spawn density can otherwise send it to a nearby zone
+-- with more creatures, even when the quest begins and ends elsewhere.
+local function GetQuestHubMap(id)
+  local quest = pfDB.quests and pfDB.quests.data and pfDB.quests.data[id]
+  if not quest then
+    return
+  end
+
+  local function findMap(relation)
+    local maps, bestMap, bestCount = {}, nil, 0
+    if not relation then
+      return
+    end
+
+    for _, kind in ipairs({ "U", "O" }) do
+      local entries = relation[kind]
+      local database = kind == "U" and pfDB.units and pfDB.units.data or pfDB.objects and pfDB.objects.data
+      if entries and database then
+        for _, entry in ipairs(entries) do
+          local record = database[entry]
+          if record and record.coords then
+            for _, coord in ipairs(record.coords) do
+              local zone = coord[3]
+              if zone and zone > 0 then
+                maps[zone] = (maps[zone] or 0) + 1
+                -- Turtle can add a second copy of an existing quest NPC in a
+                -- custom zone. Keep the data's first location when counts tie.
+                if maps[zone] > bestCount then
+                  bestMap, bestCount = zone, maps[zone]
+                end
+              end
+            end
+          end
+        end
+      end
+    end
+
+    return bestMap
+  end
+
+  return findMap(quest["end"]) or findMap(quest["start"])
+end
+
 function pfQuest:GetDatabaseURL()
   local url = pfQuest_global["dburl"]
   url = url and url ~= "" and url or self.defaultdburl
@@ -701,7 +745,7 @@ function pfQuest:AddQuestLogIntegration()
 
     local maps, meta = {}, { ["addon"] = "PFQUEST", ["qlogid"] = questIndex }
     maps = pfDatabase:SearchQuestID(id, meta, maps)
-    pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
+    pfMap:ShowMapID(GetQuestHubMap(id) or pfDatabase:GetBestMap(maps))
   end)
 
   pfQuest.buttonHide = pfQuest.buttonHide or CreateFrame("Button", "pfQuestHide", dockFrame, "UIPanelButtonTemplate")
