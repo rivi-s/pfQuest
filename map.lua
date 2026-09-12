@@ -319,10 +319,15 @@ function pfMap.tooltip:GetColor(min, max)
 end
 
 function pfMap:HexDifficultyColor(level, force)
-  if force and UnitLevel("player") < level then
+  -- Quest levels can include a suffix such as "19+". The color helper needs
+  -- a number, while callers still retain the original value for display.
+  local numericLevel = tonumber(level) or tonumber(string.match(tostring(level or ""), "%d+"))
+  if not numericLevel then return "|cffffffff" end
+
+  if force and UnitLevel("player") < numericLevel then
     return "|cffff5555"
   else
-    local c = pfQuestCompat.GetDifficultyColor(level)
+    local c = pfQuestCompat.GetDifficultyColor(numericLevel)
     return string.format("|cff%02x%02x%02x", c.r * 255, c.g * 255, c.b * 255)
   end
 end
