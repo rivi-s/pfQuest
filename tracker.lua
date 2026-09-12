@@ -91,6 +91,10 @@ local function GetQuestSortMode()
   return pfQuest_config["trackerquestsort"] == "distance" and "distance" or "level"
 end
 
+local function IsLevelSortAscending()
+  return pfQuest_config["trackerquestsortreverse"] == "1"
+end
+
 local DIST_FAR = 99999999
 
 local function UpdateSortButton()
@@ -102,7 +106,9 @@ local function UpdateSortButton()
       tracker.btnsort.tooltip = "Quest Sort: Nearest First\n|cff33ffcc<Click>|r Sort By Level"
     else
       tracker.btnsort.label:SetText("L")
-      tracker.btnsort.tooltip = "Quest Sort: Level First\n|cff33ffcc<Click>|r Sort By Nearest"
+      local direction = IsLevelSortAscending() and "Low to High" or "High to Low"
+      tracker.btnsort.tooltip = "Quest Sort: Level (" .. direction
+        .. ")\n|cff33ffcc<Click>|r Sort By Nearest\n|cff33ffcc<Right-Click>|r Reverse Level Order"
     end
   else
     tracker.btnsort:Hide()
@@ -112,15 +118,33 @@ end
 local function UpdateQuestDistances()
   if tracker.mode ~= "QUEST_TRACKING" or GetQuestSortMode() ~= "distance" then return end
 
-  local changed, nearestByTitle = nil, {}
+  local changed, nearestByTitle, nearestByID = nil, {}, {}
+  local xplayer, yplayer = GetPlayerMapPosition("player")
+  if xplayer ~= 0 or yplayer ~= 0 then
+    for _, point in ipairs(tracker.questPoints or {}) do
+      local x, y = (xplayer * 100 - point.x) * 1.5, yplayer * 100 - point.y
+      local distance = ceil(math.sqrt(x * x + y * y) * 100) / 100
+      if not nearestByTitle[point.title] or distance < nearestByTitle[point.title] then
+        nearestByTitle[point.title] = distance
+      end
+      if point.questid and (not nearestByID[point.questid] or distance < nearestByID[point.questid]) then
+        nearestByID[point.questid] = distance
+      end
+    end
+  end
+
+  -- Older maps and third-party pins can have no tracker point. Retain route
+  -- points as a fallback, but never let route display settings decide the
+  -- nearest order for ordinary active quest objectives.
   for _, data in ipairs((pfQuest.route and pfQuest.route.coords) or {}) do
     local pin, distance = data[3], data[4]
-    -- A route point is a map-pin frame. Its node holds one or more quest
-    -- entries keyed by quest title, rather than a single node.title field.
     if pin and pin.node and distance then
-      for title in pairs(pin.node) do
-        if not nearestByTitle[title] or distance < nearestByTitle[title] then
+      for title, node in pairs(pin.node) do
+        if not nearestByTitle[title] then
           nearestByTitle[title] = distance
+        end
+        if node.questid and not nearestByID[node.questid] then
+          nearestByID[node.questid] = distance
         end
       end
     end
@@ -128,7 +152,7 @@ local function UpdateQuestDistances()
 
   for _, button in pairs(tracker.buttons) do
     if not button.empty then
-      local distance = nearestByTitle[button.title]
+      local distance = nearestByID[button.questid] or nearestByTitle[button.title]
       if button.distance ~= distance then
         button.distance = distance
         changed = true
@@ -137,7 +161,12 @@ local function UpdateQuestDistances()
       button.distance = nil
     end
   end
-  if changed then tracker.needsSort = true end
+  if changed then
+    tracker.needsSort = true
+    -- Distance mode is live: request a deferred layout after movement changes
+    -- the nearest objective, rather than waiting for the next map refresh.
+    tracker:ScheduleLayout()
+  end
 end
 
 tracker = CreateFrame("Frame", "pfQuestMapTracker", UIParent)
@@ -147,6 +176,24 @@ tracker:SetWidth(200)
 tracker:SetMovable(true)
 tracker:EnableMouse(true)
 tracker:SetClampedToScreen(true)
+
+-- Map rendering registers every active quest coordinate. This intentionally
+-- differs from route.coords: a tracker sort must include objectives even when
+-- their route line, arrow, cluster, or endpoint display is disabled.
+function tracker.RegisterQuestPoint(title, node, x, y)
+  local id = tracker.buttonByTitle[title]
+  local button = id and tracker.buttons[id]
+  if not button or button.empty then return end
+
+  tracker.questPoints = tracker.questPoints or {}
+  table.insert(tracker.questPoints, {
+    title = title,
+    questid = button.questid or node.questid,
+    x = x,
+    y = y,
+  })
+end
+
 tracker:RegisterEvent("PLAYER_ENTERING_WORLD")
 tracker:SetScript("OnEvent", function()
   -- update font sizes according to config
@@ -344,12 +391,27 @@ do -- button panel
   tracker.btnsort.label:SetTextColor(0.9, 0.9, 0.9, 1)
   tracker.btnsort:SetScript("OnEnter", ShowTooltip)
   tracker.btnsort:SetScript("OnLeave", HideTooltip)
+  tracker.btnsort:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   tracker.btnsort:SetScript("OnClick", function()
+    if arg1 == "RightButton" and GetQuestSortMode() == "level" then
+      pfQuest_config["trackerquestsortreverse"] = IsLevelSortAscending() and "0" or "1"
+      UpdateSortButton()
+      tracker.needsSort = true
+      tracker:DoLayout()
+      return
+    end
+
     pfQuest_config["trackerquestsort"] = GetQuestSortMode() == "distance" and "level" or "distance"
     UpdateSortButton()
     tracker.needsSort = true
-    tracker.distanceTick = 0
-    pfMap.queue_update = GetTime()
+    -- Nearest-first is an explicit action: calculate the current map's
+    -- route distances now instead of waiting for the route's movement tick.
+    if pfQuest.route and pfQuest.route.UpdateDistances then
+      pfQuest.route:UpdateDistances()
+    end
+    UpdateQuestDistances()
+    tracker.distanceTick = GetTime() + 0.2
+    tracker:DoLayout()
   end)
 
   tracker.btnclose = CreateButton("close", "TOPRIGHT", pfQuest_Loc["Close Tracker"], function()
@@ -471,6 +533,9 @@ local function trackersort(a, b)
       and (a.distance or DIST_FAR) ~= (b.distance or DIST_FAR) then
     return (a.distance or DIST_FAR) < (b.distance or DIST_FAR)
   elseif (a.level or -1) ~= (b.level or -1) then
+    if tracker.mode == "QUEST_TRACKING" and IsLevelSortAscending() then
+      return (a.level or -1) < (b.level or -1)
+    end
     return (a.level or -1) > (b.level or -1)
   elseif tracker.mode == "QUEST_TRACKING" and (a.distance or DIST_FAR) ~= (b.distance or DIST_FAR) then
     return (a.distance or DIST_FAR) < (b.distance or DIST_FAR)
@@ -613,6 +678,10 @@ function tracker.ButtonEvent(self)
       or ""
 
     self.tracked = watched
+    -- The tracker sort uses the numeric quest level. Keep it on the quest
+    -- button just as giver entries do, otherwise level-first compares every
+    -- quest as an unset value.
+    self.level = tonumber(level)
     self.perc = percent
     self.text:SetText(
       string.format("%s%s |cffaaaaaa(%s%s%%|cffaaaaaa)|r", showlevel, title or "", colorperc or "", ceil(percent))
@@ -844,6 +913,7 @@ end
 
 function tracker.Reset()
   tracker:SetHeight(panelheight)
+  tracker.questPoints = {}
   for id, button in pairs(tracker.buttons) do
     button.level = nil
     button.title = nil
@@ -872,10 +942,9 @@ function tracker.Reset()
       -- tracker reset even though they were active in the quest log.
       local trackingmethod = tonumber(pfQuest_config["trackingmethod"])
       if trackingmethod ~= 5 and (watched or trackingmethod == 1) then
-        -- Turtle can leave simple report/talk quests unflagged even though
-        -- they have no objectives and are ready to turn in.
-        local objectives = GetNumQuestLeaderBoards(qlogid)
-        local img = (complete or not objectives or objectives == 0)
+        -- Objective rows can briefly be absent while the client reindexes the
+        -- quest log after a turn-in. Use the authoritative completion flag.
+        local img = complete
           and pfQuestConfig.path .. "\\img\\complete_c"
           or pfQuestConfig.path .. "\\img\\complete"
         pfQuest.tracker.ButtonAdd(title, { dummy = true, addon = "PFQUEST", texture = img })

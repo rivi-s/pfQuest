@@ -1,5 +1,13 @@
 # pfQuest base patch notes
 
+## 8.0.25 — 2026-09-12
+
+- Added live nearest-first and reversible level sorting to the quest tracker.
+- Added a World Map filter for available quests by difficulty color.
+- Fixed false completed markers after turning in another quest at the same NPC.
+- Improved case-insensitive searches, outdoor map selection, and Quest Log map targeting.
+- Clarified map controls and allowed pfUI to skin the custom World Map selectors.
+
 ## 8.0.24 — 2026-09-11
 
 - Added level-first and nearest-objective sorting controls to the quest tracker.

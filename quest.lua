@@ -446,7 +446,10 @@ function pfQuest:UpdateQuestlog()
       watched = IsQuestWatched(qlogid)
 
       -- build state string using table.concat (avoid string concat garbage)
-      local stateParts = { watched and "track" or "" }
+      -- Completion can change without adding or removing objective rows (for
+      -- example, a simple talk/report quest). Keep it in the change token so
+      -- its ender pin is rebuilt from the client state.
+      local stateParts = { watched and "track" or "", complete and "complete" or "incomplete" }
       if objectives then
         for i = 1, objectives, 1 do
           local text, _, done = GetQuestLogLeaderBoard(i, qlogid)
@@ -811,10 +814,198 @@ function pfQuest:AddWorldMapIntegration()
       pfQuest_config["trackingmethod"] = "1"
     end
     pfQuest.mapButton:UpdateMenu()
+    -- This is a custom dropdown, so pfUI's map module never sees it during
+    -- its normal Blizzard-control skin pass. Skin it after initialization to
+    -- match the Continent and Zone selectors without requiring pfUI on clean
+    -- clients.
+    if not pfQuest.mapButton.pfUISkinned and pfUI and pfUI.api and pfUI.api.SkinDropDown then
+      pfUI.api.SkinDropDown(pfQuest.mapButton, nil, nil, nil, true)
+      pfQuest.mapButton.pfUISkinned = true
+    end
   end)
 
   pfQuest.mapButton.point = "TOPLEFT"
   pfQuest.mapButton.relativePoint = "BOTTOMLEFT"
+
+  -- Keep the available-quest difficulty filter with the other World Map
+  -- controls. It belongs to the map frame rather than the zoomed map canvas,
+  -- so Magnify cannot clip it when the map is scaled.
+  pfQuest.mapLevelButton = CreateFrame("Frame", "pfQuestMapLevelDropdown", WorldMapFrame, "UIDropDownMenuTemplate")
+  pfQuest.mapLevelButton:ClearAllPoints()
+  -- Keep this directly below Filter Markers and Find Marker while preserving
+  -- the exact transform used by the established All Quests selector.
+  pfQuest.mapLevelButton:SetPoint("TOPRIGHT", pfQuest.mapButton, "TOPRIGHT", 0, -95)
+  pfQuest.mapLevelButton.point = "TOPLEFT"
+  pfQuest.mapLevelButton.relativePoint = "BOTTOMLEFT"
+
+  local levelModes = {
+    { value = "all", text = "All Levels", label = "All Levels" },
+    { value = "orange", text = "|cffff8040Orange & Lower|r", label = "Orange & Lower" },
+    { value = "yellow", text = "|cffffff00Yellow & Lower|r", label = "Yellow & Lower" },
+    { value = "green", text = "|cff40c040Green & Lower|r", label = "Green & Lower" },
+    { value = "gray", text = "|cff999999Grey|r", label = "Grey" },
+  }
+
+  function pfQuest.mapLevelButton:UpdateMenu()
+    local selected = pfQuest_config["questpinlevelrange"] or "all"
+    local selectedID = 1
+    local function CreateEntries()
+      for index, mode in ipairs(levelModes) do
+        -- Match the established World Map selector's entry construction.
+        -- On the legacy client, the shared CreateInfo table can retain visual
+        -- state from the previously opened map menu.
+        local info = {}
+        info.text = mode.text
+        info.value = mode.value
+        info.checked = selected == mode.value
+        info.func = function()
+          pfQuest_config["questpinlevelrange"] = this.value
+          UIDropDownMenu_SetSelectedID(pfQuest.mapLevelButton, this:GetID(), 0)
+          pfQuest:ResetAll()
+        end
+        if selected == mode.value then selectedID = index end
+        UIDropDownMenu_AddButton(info)
+      end
+    end
+
+    pfQuest.mapLevelButton.current = selectedID
+    UIDropDownMenu_Initialize(pfQuest.mapLevelButton, CreateEntries)
+    if client >= 30300 then
+      UIDropDownMenu_SetWidth(pfQuest.mapLevelButton, 120)
+      UIDropDownMenu_SetButtonWidth(pfQuest.mapLevelButton, 125)
+      UIDropDownMenu_JustifyText(pfQuest.mapLevelButton, "RIGHT")
+    else
+      UIDropDownMenu_SetWidth(120, pfQuest.mapLevelButton)
+      UIDropDownMenu_SetButtonWidth(125, pfQuest.mapLevelButton)
+      UIDropDownMenu_JustifyText("RIGHT", pfQuest.mapLevelButton)
+    end
+    UIDropDownMenu_SetSelectedID(pfQuest.mapLevelButton, pfQuest.mapLevelButton.current)
+    pfQuest.mapLevelButton.currentLabel = levelModes[selectedID].label
+    -- Moving this control out of the map canvas prevents the legacy template
+    -- from repainting its selected caption automatically.
+    if client >= 30300 then
+      UIDropDownMenu_SetText(pfQuest.mapLevelButton, levelModes[selectedID].text)
+    else
+      UIDropDownMenu_SetText(levelModes[selectedID].text, pfQuest.mapLevelButton)
+    end
+    -- The stock template anchors its text to the map canvas. This dropdown is
+    -- intentionally in WorldMapFrame, so anchor the existing text child to
+    -- its own control instead of creating a separate display frame.
+    local text = pfQuest.mapLevelButton.Text or _G["pfQuestMapLevelDropdownText"]
+    local mapText = pfQuest.mapButton.Text or _G["pfQuestMapDropdownText"]
+    if text then
+      text:ClearAllPoints()
+      text:SetPoint("RIGHT", pfQuest.mapLevelButton, "RIGHT", -42, 0)
+      text:SetWidth(110)
+      text:SetJustifyH("RIGHT")
+      text:SetDrawLayer("OVERLAY")
+      text:SetAlpha(1)
+      text:SetText(levelModes[selectedID].label)
+      text:Show()
+      if mapText and mapText.GetFont then
+        local font, size, flags = mapText:GetFont()
+        if font then text:SetFont(font, size, flags) end
+        local r, g, b, a = mapText:GetTextColor()
+        text:SetTextColor(r, g, b, a)
+      end
+      text:Hide()
+    end
+  end
+
+  local function ApplyMapLevelButtonSkin()
+    if not pfQuest.mapLevelButton.pfUISkinned and pfUI and pfUI.api and pfUI.api.SkinDropDown then
+      pfUI.api.SkinDropDown(pfQuest.mapLevelButton, nil, nil, nil, true)
+      pfQuest.mapLevelButton.pfUISkinned = true
+    end
+    local sourceBackdrop = pfQuest.mapButton.backdrop
+    local targetBackdrop = pfQuest.mapLevelButton.backdrop
+    if sourceBackdrop and targetBackdrop then
+      local sourceStyle = sourceBackdrop:GetBackdrop()
+      local sourceBorder = pfQuest.mapButton.backdrop_border
+      local targetBorder = pfQuest.mapLevelButton.backdrop_border
+      if sourceBorder and targetBorder then
+        -- pfUI's Blizzard-border mode supplies a dedicated border frame. The
+        -- relocated dropdown otherwise draws the edge from both frames,
+        -- making it visibly brighter than the established map selectors.
+        targetBackdrop:SetBackdrop({
+          bgFile = sourceStyle.bgFile,
+          tile = sourceStyle.tile,
+          tileSize = sourceStyle.tileSize,
+          insets = sourceStyle.insets,
+        })
+        targetBorder:SetBackdrop(sourceBorder:GetBackdrop())
+        local r, g, b, a = sourceBorder:GetBackdropBorderColor()
+        -- This border is composited directly over the map rather than through
+        -- WorldMapButton, which makes the same pfUI colour render slightly
+        -- brighter. Preserve the configured hue and alpha with a small
+        -- luminance correction for the different parent.
+        targetBorder:SetBackdropBorderColor(r * .82, g * .82, b * .82, a)
+      else
+        targetBackdrop:SetBackdrop(sourceStyle)
+      end
+      local r, g, b, a = sourceBackdrop:GetBackdropColor()
+      targetBackdrop:SetBackdropColor(r, g, b, a)
+      if not targetBorder then
+        r, g, b, a = sourceBackdrop:GetBackdropBorderColor()
+        targetBackdrop:SetBackdropBorderColor(r, g, b, a)
+      end
+    end
+    local button = pfQuest.mapLevelButton.Button or _G["pfQuestMapLevelDropdownButton"]
+    if button then
+      if button.backdrop then
+        button.backdrop:SetFrameLevel(button:GetFrameLevel())
+      end
+      if not button.pfQuestFill then
+        button.pfQuestFill = button:CreateTexture(nil, "BACKGROUND")
+        button.pfQuestFill:SetPoint("TOPLEFT", button, "TOPLEFT", 1, -1)
+        button.pfQuestFill:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -1, 1)
+        button.pfQuestFill:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+        button.pfQuestFill:SetVertexColor(0, 0, 0, .75)
+      end
+      button.pfQuestFill:Show()
+      if not button.pfQuestLabel then
+        button.pfQuestLabel = button:CreateFontString(nil, "OVERLAY")
+        button.pfQuestLabel:SetWidth(110)
+        button.pfQuestLabel:SetPoint("RIGHT", button, "RIGHT", -42, 0)
+        button.pfQuestLabel:SetJustifyH("RIGHT")
+        button.pfQuestLabel:SetFont((pfUI and pfUI.font_default) or STANDARD_TEXT_FONT, 12, "OUTLINE")
+      end
+      local mapText = pfQuest.mapButton.Text or _G["pfQuestMapDropdownText"]
+      if mapText and mapText.GetFont then
+        local font, size, flags = mapText:GetFont()
+        if font then button.pfQuestLabel:SetFont(font, size, flags) end
+        local r, g, b, a = mapText:GetTextColor()
+        button.pfQuestLabel:SetTextColor(r, g, b, a)
+      else
+        button.pfQuestLabel:SetTextColor(1, 1, 1, 1)
+      end
+      button.pfQuestLabel:SetText(pfQuest.mapLevelButton.currentLabel or "All Levels")
+      button.pfQuestLabel:Show()
+    end
+  end
+
+  local function SyncMapLevelScale()
+    local parentScale = WorldMapFrame:GetEffectiveScale()
+    local sourceScale = pfQuest.mapButton:GetEffectiveScale()
+    if parentScale > 0 and sourceScale > 0 then
+      pfQuest.mapLevelButton:SetScale(sourceScale / parentScale)
+    end
+  end
+
+  pfQuest.mapLevelButton:SetScript("OnShow", function()
+    pfQuest.mapLevelButton:UpdateMenu()
+    ApplyMapLevelButtonSkin()
+    SyncMapLevelScale()
+  end)
+
+  pfQuest.mapLevelButton.lastMapScale = nil
+  pfQuest.mapLevelButton:SetScript("OnUpdate", function()
+    local scale = pfQuest.mapButton:GetEffectiveScale()
+    if scale ~= pfQuest.mapLevelButton.lastMapScale then
+      pfQuest.mapLevelButton.lastMapScale = scale
+      SyncMapLevelScale()
+    end
+  end)
 
   function pfQuest.mapButton:UpdateMenu()
     local function CreateEntries()

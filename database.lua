@@ -999,7 +999,9 @@ function pfDatabase:GetBestMap(maps)
 
   -- calculate best map results
   for map, count in pairs(maps or {}) do
-    if count > bestscore or (count == 0 and bestscore == 0) then
+    local preferOutdoor = count == bestscore and pfMap and pfMap.IsZoneMapID
+      and pfMap:IsZoneMapID(map) and (not bestmap or not pfMap:IsZoneMapID(bestmap))
+    if count > bestscore or (count == 0 and bestscore == 0) or preferOutdoor then
       bestscore = count
       bestmap = map
     end
@@ -1533,8 +1535,10 @@ function pfDatabase:SearchQuestID(id, meta, maps)
       -- compute complete state once, outside both ender loops
       local ender_texture
       if meta["qlogid"] then
+        -- A quest-log slot can briefly have no objective rows while the game
+        -- reindexes it after a turn-in. Only the client completion flag can
+        -- promote an ender marker to the completed (yellow) state.
         local _, _, _, _, _, complete = compat.GetQuestLogTitle(meta["qlogid"])
-        complete = complete or GetNumQuestLeaderBoards(meta["qlogid"]) == 0 and true or nil
         ender_texture = (complete == true or complete == 1) and pfQuestConfig.path .. "\\img\\complete_c"
           or pfQuestConfig.path .. "\\img\\complete"
       else
@@ -1813,14 +1817,33 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
     return
   end
 
-  -- hide lowlevel quests
-  if quests[id]["lvl"] and quests[id]["lvl"] < plevel - 4 and pfQuest_config["showlowlevel"] == "0" then
-    return
-  end
-
-  -- hide highlevel quests (or show those that are 3 levels above)
-  if quests[id]["min"] and quests[id]["min"] > plevel + (pfQuest_config["showhighlevel"] == "1" and 3 or 0) then
-    return
+  local levelRange = pfQuest_config["questpinlevelrange"] or "all"
+  if levelRange ~= "all" and quests[id]["lvl"] then
+    -- Match the client's own quest-color rules rather than hard-coding level
+    -- offsets. A selected color includes that color and every easier color.
+    local color = pfQuestCompat.GetDifficultyColor(tonumber(quests[id]["lvl"]))
+    local rank
+    if color.r > .9 and color.g < .15 then
+      rank = 5 -- red
+    elseif color.r > .9 and color.g < .9 then
+      rank = 4 -- orange
+    elseif color.r > .9 then
+      rank = 3 -- yellow
+    elseif color.g > color.r then
+      rank = 2 -- green
+    else
+      rank = 1 -- grey
+    end
+    local maximum = ({ orange = 4, yellow = 3, green = 2, gray = 1 })[levelRange]
+    if maximum and rank > maximum then return end
+  else
+    -- Keep the existing high/low-level quest-giver settings for All Levels.
+    if quests[id]["lvl"] and quests[id]["lvl"] < plevel - 4 and pfQuest_config["showlowlevel"] == "0" then
+      return
+    end
+    if quests[id]["min"] and quests[id]["min"] > plevel + (pfQuest_config["showhighlevel"] == "1" and 3 or 0) then
+      return
+    end
   end
 
   -- hide event quests

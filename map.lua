@@ -598,6 +598,28 @@ function pfMap:GetMapID(cid, mid)
   return id
 end
 
+-- A map returned by GetMapZones is a normal world/zone surface.  Browser
+-- searches can find an NPC both outside an instance and just inside it; when
+-- their source counts tie, opening the outdoor zone is the useful default.
+local zoneMapCache = {}
+function pfMap:IsZoneMapID(id)
+  id = tonumber(id)
+  if not id then return false end
+  if zoneMapCache[id] ~= nil then return zoneMapCache[id] end
+
+  for cid in pairs({ GetMapContinents() }) do
+    for _, name in pairs({ GetMapZones(cid) }) do
+      if pfMap:GetMapIDByName(name) == id then
+        zoneMapCache[id] = true
+        return true
+      end
+    end
+  end
+
+  zoneMapCache[id] = false
+  return false
+end
+
 function pfMap:AddNode(meta)
   if not meta then
     return
@@ -906,20 +928,25 @@ function pfMap:NodeEnter()
 
   -- add tooltip help if setting is enabled
   if pfQuest_config["tooltiphelp"] == "1" then
-    local text = pfQuest_Loc["Use <Shift>-Click To Remove Nodes"]
+    local text = string.gsub(pfQuest_Loc["Use <Shift>-Click To Remove Nodes"], "^Use ", "")
+    local shifttext
 
     if this.cluster then
       text = pfQuest_Loc["Hold <Ctrl> To Hide Cluster"]
     elseif tooltip == GameTooltip then
       text = pfQuest_Loc["Hold <Ctrl> To Hide Minimap Nodes"]
+      shifttext = this.questid and this.texture and this.layer < 5
+        and string.gsub(pfQuest_Loc["Use <Shift>-Click To Mark Quest As Done"], "^Use ", "")
+        or string.gsub(pfQuest_Loc["Use <Shift>-Click To Remove Nodes"], "^Use ", "")
     elseif not this.texture then
       text = pfQuest_Loc["Click Node To Change Color"]
     elseif this.questid and this.texture and this.layer < 5 then
-      text = pfQuest_Loc["Use <Shift>-Click To Mark Quest As Done"]
+      text = string.gsub(pfQuest_Loc["Use <Shift>-Click To Mark Quest As Done"], "^Use ", "")
     end
 
     -- update tooltip and sizes
     tooltip:AddLine(text, 0.6, 0.6, 0.6)
+    if shifttext then tooltip:AddLine(shifttext, 0.6, 0.6, 0.6) end
     tooltip:Show()
   end
 
@@ -1330,8 +1357,7 @@ function pfMap:UpdateNodes()
         -- Use the quest-log state here so simple report/talk turn-ins do not
         -- leave the tracker with the fallback's unfinished grey question mark.
         local _, _, _, _, _, complete = compat.GetQuestLogTitle(quest.qlogid)
-        local objectives = GetNumQuestLeaderBoards(quest.qlogid)
-        local texture = (complete or not objectives or objectives == 0)
+        local texture = complete
           and pfQuestConfig.path .. "\\img\\complete_c"
           or pfQuestConfig.path .. "\\img\\complete"
         pfQuest.tracker.ButtonAdd(title, {
@@ -1416,6 +1442,7 @@ function pfMap:UpdateNodes()
         -- and must remain visible in Current Zone Only mode.
         for title, node in pairs(pfMap.pins[i].node) do
           pfQuest.tracker.ButtonAdd(title, node)
+          pfQuest.tracker.RegisterQuestPoint(title, node, x, y)
         end
 
         -- Hide pfQuest pins outside the character's discovered map overlays.

@@ -188,6 +188,22 @@ pfQuest.route.AddPoint = function(self, tbl)
   self.recalculate = true
 end
 
+-- Update point distances on demand. The route's OnUpdate normally calls this
+-- while the player moves, but consumers such as the tracker can request an
+-- immediate, consistent snapshot when changing sort modes.
+pfQuest.route.UpdateDistances = function(self)
+  local xplayer, yplayer = GetPlayerMapPosition("player")
+  if xplayer == 0 and yplayer == 0 then return nil end
+
+  for id, data in ipairs(self.coords) do
+    if data[1] and data[2] then
+      local x, y = (xplayer * 100 - data[1]) * 1.5, yplayer * 100 - data[2]
+      self.coords[id][4] = ceil(math.sqrt(x * x + y * y) * 100) / 100
+    end
+  end
+  return true
+end
+
 local targetTitle, targetCluster, targetLayer, targetTexture = nil, nil, nil, nil
 pfQuest.route.SetTarget = function(node, default)
   if
@@ -272,12 +288,7 @@ pfQuest.route:SetScript("OnUpdate", function()
   lastpos = curpos
 
   -- update distances to player
-  for id, data in ipairs(this.coords) do
-    if data[1] and data[2] then
-      local x, y = (xplayer * 100 - data[1]) * 1.5, yplayer * 100 - data[2]
-      this.coords[id][4] = ceil(math.sqrt(x * x + y * y) * 100) / 100
-    end
-  end
+  this:UpdateDistances()
   -- Reorder only when the available route nodes or an explicit target change.
   -- Re-sorting every second while the player moves causes route flicker and
   -- expensive map redraws without improving the selected objective.
