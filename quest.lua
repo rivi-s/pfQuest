@@ -757,6 +757,15 @@ function pfQuest:AddWorldMapIntegration()
   pfQuest.mapButton:SetPoint("TOPRIGHT", 0, -10)
   pfQuest.mapButton:SetScript("OnShow", function()
     pfQuest.mapButton.current = tonumber(pfQuest_config["trackingmethod"])
+    -- Version 8.0.23 briefly exposed a sixth filter while it was being
+    -- evaluated.  It was removed before release, but that value can remain
+    -- in a test character's saved settings.  A dropdown with no matching
+    -- entry keeps whatever text it last drew (often a zone name), so repair
+    -- the setting before building the menu.
+    if not pfQuest.mapButton.current or pfQuest.mapButton.current < 1 or pfQuest.mapButton.current > 5 then
+      pfQuest.mapButton.current = 1
+      pfQuest_config["trackingmethod"] = "1"
+    end
     pfQuest.mapButton:UpdateMenu()
   end)
 

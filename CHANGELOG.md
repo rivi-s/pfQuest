@@ -1,5 +1,11 @@
 # pfQuest base patch notes
 
+## 8.0.24 — 2026-09-11
+
+- Added level-first and nearest-objective sorting controls to the quest tracker.
+- Made Ctrl-hide for minimap nodes react immediately in every refresh mode.
+- Fixed stale world-map filter labels and zone state after browsing another map.
+
 ## 8.0.23 — 2026-09-11
 
 - Added `/db version`, which reports the loaded pfQuest base version and Turtle extension version when installed.

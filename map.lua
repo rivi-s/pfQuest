@@ -1478,6 +1478,22 @@ function pfMap:UpdateMinimap()
     return
   end
 
+  -- Holding Ctrl over the minimap is an interaction gesture, not a normal map
+  -- refresh.  Handle it before the selected refresh mode can defer work for
+  -- several hundred milliseconds, then force one redraw on release.
+  local hideMinimapNodes = controlkey.pressed and MouseIsOver(pfMap.drawlayer)
+  if hideMinimapNodes then
+    this.xPlayer = nil
+    this.minimapHiddenByCtrl = true
+    for _, pin in pairs(pfMap.mpins) do
+      pin:Hide()
+    end
+    return
+  elseif this.minimapHiddenByCtrl then
+    this.minimapHiddenByCtrl = nil
+    this.minimapTick = nil
+  end
+
   -- Smooth preserves the original high-end behavior. The other modes reduce
   -- repeated pin placement in dense areas, especially at wide minimap zoom.
   local mZoom = pfMap.drawlayer:GetZoom()
@@ -1494,17 +1510,6 @@ function pfMap:UpdateMinimap()
     return
   end
   this.minimapTick = GetTime() + interval
-
-  -- hide all minimap nodes while shift is pressed
-  if controlkey.pressed and MouseIsOver(pfMap.drawlayer) then
-    this.xPlayer = nil
-
-    for id, pin in pairs(pfMap.mpins) do
-      pin:Hide()
-    end
-
-    return
-  end
 
   -- The 1.12 API reports the player in the coordinates of whichever World Map
   -- view is currently selected. While a continent map is open that is not the
@@ -1902,7 +1907,12 @@ pfMap:SetScript("OnUpdate", function()
     resetmap = true
   elseif resetmap == true then
     SetMapToCurrentZone()
-    pfMap.playerMapID = pfMap:GetPlayerMapID() or pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+    -- Do not call GetPlayerMapID here: it intentionally returns the cached
+    -- value first, which would preserve the map the player was browsing.
+    -- Read the client map context we just restored instead.
+    pfMap.playerMapID = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+      or (GetRealZoneText and pfMap:GetMapIDByName(GetRealZoneText()))
+    pfMap:MarkMapVisited(pfMap.playerMapID)
     resetmap = nil
   end
 
