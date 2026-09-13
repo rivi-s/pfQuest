@@ -204,6 +204,16 @@ StaticPopupDialogs["PFQUEST_RESET"] = {
   hideOnEscape = 1,
 }
 
+StaticPopupDialogs["PFQUEST_RELOAD_REQUIRED"] = {
+  text = "This setting requires a UI reload to take effect.",
+  button1 = "Reload UI",
+  button2 = "Later",
+  OnAccept = ReloadUI,
+  timeout = 0,
+  whileDead = 1,
+  hideOnEscape = 1,
+}
+
 pfQuestConfig = CreateFrame("Frame", "pfQuestConfig", UIParent)
 pfQuestConfig:Hide()
 pfQuestConfig:SetWidth(280)
@@ -341,6 +351,12 @@ local fullRefreshSettings = {
   showfestival = true,
 }
 
+local reloadSettings = {
+  worldmapmenu = true,
+  minimapbutton = true,
+  questlogbuttons = true,
+}
+
 local mapRefreshSettings = {
   showspawn = true,
   showspawnmini = true,
@@ -463,7 +479,9 @@ function pfQuestConfig:CreateConfigEntries(config)
           this.lastVisualValue = pfQuest_config[this.config]
           SetCheckboxVisual(this, checked)
 
-          if this.config == "showtracker" and pfQuest.tracker then
+          if reloadSettings[this.config] then
+            StaticPopup_Show("PFQUEST_RELOAD_REQUIRED")
+          elseif this.config == "showtracker" and pfQuest.tracker then
             if pfQuest_config[this.config] == "1" then
               pfQuest.tracker:Show()
             else
