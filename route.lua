@@ -222,6 +222,10 @@ pfQuest.route.SetTarget = function(node, default)
   targetCluster = node and node.cluster or nil
   targetLayer = node and node.layer or nil
   targetTexture = node and node.texture or nil
+  -- An explicit target owns the arrow until it is cleared. If that target is
+  -- not present in the current map's route points, do not silently fall back
+  -- to the nearest quest objective.
+  pfQuest.route.targetMissing = node and true or nil
   pfQuest.route.recalculate = true
 end
 
@@ -342,6 +346,12 @@ pfQuest.route:SetScript("OnUpdate", function()
       end
     end
 
+    -- SetTarget is also used by waypoint addons. Keep an explicit selection
+    -- authoritative: while its node is unavailable on the current map, the
+    -- route and arrow stay hidden instead of switching to an unrelated quest.
+    this.targetMissing = targetTitle and
+      (not this.coords[1] or not pfQuest.route.IsTarget(this.coords[1][3])) or nil
+
     automaticTargetKey = not targetTitle and TargetKey(this.coords[1]) or nil
 
     this.recalculate = nil
@@ -350,6 +360,7 @@ pfQuest.route:SetScript("OnUpdate", function()
   -- show arrow when route exists and is stable
   if
     not wrongmap
+    and not this.targetMissing
     and this.coords[1]
     and this.coords[1][4]
     and not this.arrow:IsShown()
@@ -360,7 +371,7 @@ pfQuest.route:SetScript("OnUpdate", function()
   end
 
   -- abort without any nodes or distances
-  if not this.coords[1] or not this.coords[1][4] or pfQuest_config["routes"] == "0" then
+  if this.targetMissing or not this.coords[1] or not this.coords[1][4] or pfQuest_config["routes"] == "0" then
     ClearPath(objectivepath)
     ClearPath(playerpath)
     ClearPath(mplayerpath)
@@ -499,7 +510,8 @@ pfQuest.route.arrow:SetScript("OnUpdate", function()
 
   xplayer, yplayer = GetPlayerMapPosition("player")
   wrongmap = xplayer == 0 and yplayer == 0 and true or nil
-  target = this.parent.coords and this.parent.coords[1] and this.parent.coords[1][4] and this.parent.coords[1] or nil
+  target = not this.parent.targetMissing and this.parent.coords and this.parent.coords[1]
+    and this.parent.coords[1][4] and this.parent.coords[1] or nil
 
   -- disable arrow on invalid map/route
   if not target or wrongmap then
