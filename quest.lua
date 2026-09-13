@@ -864,9 +864,11 @@ function pfQuest:AddWorldMapIntegration()
           return (pfQuest_config["questpinlevelrange"] or "all") == value
         end
         info.func = function()
-          pfQuest_config["questpinlevelrange"] = value
-          -- The legacy menu must be closed before its entries are rebuilt;
-          -- reinitializing an open menu leaves later selections stale.
+          -- Use the clicked button's value. Legacy dropdown rows are reused,
+          -- so a closure can otherwise retain a previous entry's value.
+          local selectedValue = this and this.value
+          if not selectedValue then return end
+          pfQuest_config["questpinlevelrange"] = selectedValue
           CloseDropDownMenus()
           pfQuest.mapLevelButton:UpdateMenu()
           pfQuest:ResetAll()
