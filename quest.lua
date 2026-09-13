@@ -938,6 +938,31 @@ function pfQuest:AddWorldMapIntegration()
       end
       text:Show()
     end
+
+    -- pfUI skins the legacy dropdown before this text is drawn. On the 1.12
+    -- client its template caption can remain blank afterward, so keep a
+    -- separate caption above the skin while leaving all visual styling to
+    -- SkinDropDown.
+    if not pfQuest.mapLevelButton.pfQuestCaption then
+      pfQuest.mapLevelButton.pfQuestCaption = pfQuest.mapLevelButton:CreateFontString(nil, "OVERLAY")
+    end
+    local caption = pfQuest.mapLevelButton.pfQuestCaption
+    local captionFont, captionSize, captionFlags
+    if mapText and mapText.GetFont then
+      captionFont, captionSize, captionFlags = mapText:GetFont()
+      local r, g, b, a = mapText:GetTextColor()
+      caption:SetTextColor(r, g, b, a)
+    end
+    if not captionFont and GameFontNormal then
+      captionFont, captionSize, captionFlags = GameFontNormal:GetFont()
+    end
+    if captionFont then caption:SetFont(captionFont, captionSize, captionFlags) end
+    caption:ClearAllPoints()
+    caption:SetPoint("RIGHT", pfQuest.mapLevelButton, "RIGHT", -42, 0)
+    caption:SetWidth(110)
+    caption:SetJustifyH("RIGHT")
+    caption:SetText("Level Range")
+    caption:Show()
   end
 
   local function ApplyMapLevelButtonSkin()
