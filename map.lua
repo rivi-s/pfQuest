@@ -1560,6 +1560,17 @@ function pfMap:UpdateMinimap()
   local xPlayer, yPlayer
   if WorldMapFrame:IsShown() then
     xPlayer, yPlayer = pfMap.minimapPlayerX, pfMap.minimapPlayerY
+    -- The coordinate API is valid when the player is browsing their current
+    -- zone. Keep minimap quest pins moving in that case, but retain the last
+    -- known real-zone position when they browse another zone or continent.
+    local visibleMap = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+    if visibleMap and visibleMap == pfMap.minimapMapID then
+      local currentX, currentY = GetPlayerMapPosition("player")
+      if currentX and currentY and not (currentX == 0 and currentY == 0) then
+        xPlayer, yPlayer = currentX, currentY
+        pfMap.minimapPlayerX, pfMap.minimapPlayerY = currentX, currentY
+      end
+    end
   else
     xPlayer, yPlayer = GetPlayerMapPosition("player")
     if xPlayer and yPlayer and not (xPlayer == 0 and yPlayer == 0) then
