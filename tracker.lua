@@ -719,7 +719,11 @@ function tracker.ButtonEvent(self)
   -- Mark for sort instead of sorting immediately (deferred)
   tracker.needsSort = true
   tracker:ScheduleLayout()
-  self:Show()
+  if tracker.mode == "QUEST_TRACKING" and tracker.visibleQuests and not tracker.visibleQuests[title] then
+    self:Hide()
+  else
+    self:Show()
+  end
 end
 
 -- Separate function for layout (only called when needed)
@@ -743,6 +747,7 @@ function tracker.DoLayout()
   end
 
   local visibleQuests = tracker.mode == "QUEST_TRACKING" and ReadQuestLogVisibility() or nil
+  tracker.visibleQuests = visibleQuests
 
   -- resize window and align buttons
   local height = panelheight

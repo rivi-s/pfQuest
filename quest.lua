@@ -843,7 +843,6 @@ function pfQuest:AddWorldMapIntegration()
   pfQuest.mapLevelButton.relativePoint = "BOTTOMLEFT"
 
   local levelModes = {
-    { value = "all", text = "All Levels", label = "All Levels" },
     { value = "orange", text = "|cffff8040Orange & Lower|r", label = "Orange & Lower" },
     { value = "yellow", text = "|cffffff00Yellow & Lower|r", label = "Yellow & Lower" },
     { value = "green", text = "|cff40c040Green & Lower|r", label = "Green & Lower" },
@@ -851,8 +850,12 @@ function pfQuest:AddWorldMapIntegration()
   }
 
   function pfQuest.mapLevelButton:UpdateMenu()
-    local selected = pfQuest_config["questpinlevelrange"] or "all"
-    local selectedID = 1
+    local selected = pfQuest_config["questpinlevelrange"] or "off"
+    if selected == "all" then
+      selected = "off"
+      pfQuest_config["questpinlevelrange"] = "off"
+    end
+    local selectedID
     local function CreateEntries()
       for index, mode in ipairs(levelModes) do
         -- Match the established World Map selector's entry construction.
@@ -868,7 +871,9 @@ function pfQuest:AddWorldMapIntegration()
           -- so a closure can otherwise retain a previous entry's value.
           local selectedValue = this and this.value
           if not selectedValue then return end
-          pfQuest_config["questpinlevelrange"] = selectedValue
+          -- Clicking the active range again disables the feature and restores
+          -- normal pfQuest high/low-level filtering.
+          pfQuest_config["questpinlevelrange"] = selected == selectedValue and "off" or selectedValue
           CloseDropDownMenus()
           pfQuest.mapLevelButton:UpdateMenu()
           pfQuest:ResetAll()
@@ -893,9 +898,9 @@ function pfQuest:AddWorldMapIntegration()
     -- Moving this control out of the map canvas prevents the legacy template
     -- from repainting its selected caption automatically.
     if client >= 30300 then
-      UIDropDownMenu_SetText(pfQuest.mapLevelButton, levelModes[selectedID].text)
+      UIDropDownMenu_SetText(pfQuest.mapLevelButton, "Level Range")
     else
-      UIDropDownMenu_SetText(levelModes[selectedID].text, pfQuest.mapLevelButton)
+      UIDropDownMenu_SetText("Level Range", pfQuest.mapLevelButton)
     end
     -- The stock template anchors its text to the map canvas. This dropdown is
     -- intentionally in WorldMapFrame, so anchor the existing text child to
@@ -909,7 +914,7 @@ function pfQuest:AddWorldMapIntegration()
       text:SetJustifyH("RIGHT")
       text:SetDrawLayer("OVERLAY")
       text:SetAlpha(1)
-      text:SetText(levelModes[selectedID].label)
+      text:SetText("Level Range")
       text:Show()
       if mapText and mapText.GetFont then
         local font, size, flags = mapText:GetFont()
@@ -917,12 +922,17 @@ function pfQuest:AddWorldMapIntegration()
         local r, g, b, a = mapText:GetTextColor()
         text:SetTextColor(r, g, b, a)
       end
-      text:Hide()
+      if pfUI and pfUI.api and pfUI.api.SkinDropDown then
+        text:Hide()
+      else
+        text:Show()
+      end
     end
   end
 
   local function ApplyMapLevelButtonSkin()
-    if not pfQuest.mapLevelButton.pfUISkinned and pfUI and pfUI.api and pfUI.api.SkinDropDown then
+    if not (pfUI and pfUI.api and pfUI.api.SkinDropDown) then return end
+    if not pfQuest.mapLevelButton.pfUISkinned then
       pfUI.api.SkinDropDown(pfQuest.mapLevelButton, nil, nil, nil, true)
       pfQuest.mapLevelButton.pfUISkinned = true
     end

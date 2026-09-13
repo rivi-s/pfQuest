@@ -1817,8 +1817,12 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
     return
   end
 
-  local levelRange = pfQuest_config["questpinlevelrange"] or "all"
-  if levelRange ~= "all" and quests[id]["lvl"] then
+  local levelRange = pfQuest_config["questpinlevelrange"] or "off"
+  -- "all" was the original default while this filter was being introduced.
+  -- Treat it as disabled so existing characters return to normal pfQuest
+  -- high/low-level behavior too.
+  if levelRange == "all" then levelRange = "off" end
+  if levelRange ~= "off" and quests[id]["lvl"] then
     -- Match the client's own quest-color rules rather than hard-coding level
     -- offsets. A selected color includes that color and every easier color.
     local color = pfQuestCompat.GetDifficultyColor(tonumber(quests[id]["lvl"]))
@@ -1836,6 +1840,14 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
     end
     local maximum = ({ orange = 4, yellow = 3, green = 2, gray = 1 })[levelRange]
     if maximum and rank > maximum then return end
+  else
+    -- With no Level Range selected, preserve normal pfQuest behavior.
+    if quests[id]["lvl"] and quests[id]["lvl"] < plevel - 4 and pfQuest_config["showlowlevel"] == "0" then
+      return
+    end
+    if quests[id]["min"] and quests[id]["min"] > plevel + (pfQuest_config["showhighlevel"] == "1" and 3 or 0) then
+      return
+    end
   end
 
   -- hide event quests

@@ -129,7 +129,7 @@ pfQuest_defconfig = {
   {
     config = "questpinlevelrange",
     text = nil,
-    default = "all",
+    default = "off",
     type = nil,
   },
 
