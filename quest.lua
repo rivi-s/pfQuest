@@ -885,7 +885,7 @@ function pfQuest:AddWorldMapIntegration()
       UIDropDownMenu_SetButtonWidth(125, pfQuest.mapLevelButton)
       UIDropDownMenu_JustifyText("RIGHT", pfQuest.mapLevelButton)
     end
-    pfQuest.mapLevelButton.currentLabel = levelModes[selectedID].label
+    pfQuest.mapLevelButton.currentLabel = "Level Range"
     -- Moving this control out of the map canvas prevents the legacy template
     -- from repainting its selected caption automatically.
     if client >= 30300 then
