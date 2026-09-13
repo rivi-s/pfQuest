@@ -1,5 +1,12 @@
 # pfQuest base patch notes
 
+## 8.0.27 — 2026-09-13
+
+- Kept collapsed Quest Log headers and tracker visibility stable through quest progress and completion updates.
+- Made Level Range optional and restored normal pfQuest filtering when no range is selected.
+- Restored the native Level Range selector appearance on clean clients while retaining pfUI skin support.
+- Kept explicit waypoint-addon arrow targets authoritative instead of switching to unrelated quest objectives.
+
 ## 8.0.26 — 2026-09-12
 
 - Renamed the World Map filter to Level Range and made All Levels show every available quest.
