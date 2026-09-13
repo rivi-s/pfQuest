@@ -247,6 +247,9 @@ pfMap.tooltipIndex = {}
 -- Keyed by node table reference so the node table itself stays clean.
 -- AddNode/DeleteNode insert here; UpdateNodes reads and clears entries.
 pfMap.dirtyNodes = {}
+-- World-map rendering clears dirtyNodes. Keep minimap work separate so opening
+-- the World Map cannot consume an objective refresh before the minimap sees it.
+pfMap.dirtyMinimapNodes = {}
 
 -- Set of map IDs that have at least one dirty node table.
 -- Keyed by zone map ID (integer). Allows WORLD_MAP_UPDATE to cheaply check
@@ -696,14 +699,18 @@ function pfMap:AddNode(meta)
             -- The map pin stays visually merged, but its tooltip needs to
             -- refresh so it can list every creature sharing this location.
             pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
+            pfMap.dirtyMinimapNodes[pfMap.nodes[addon][map][coords]] = true
             pfMap.dirtyMaps[map] = true
           end
           return
         end
       end
 
-      -- add new item and exit
+      -- add new item and refresh both map surfaces before exiting.
       table.insert(pfMap.nodes[addon][map][coords][title].item, item)
+      pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
+      pfMap.dirtyMinimapNodes[pfMap.nodes[addon][map][coords]] = true
+      pfMap.dirtyMaps[map] = true
       return
     end
 
@@ -732,6 +739,7 @@ function pfMap:AddNode(meta)
 
   -- mark this coord's node table dirty so UpdateNodes knows to reprocess it
   pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
+  pfMap.dirtyMinimapNodes[pfMap.nodes[addon][map][coords]] = true
   pfMap.dirtyMaps[map] = true
 
   -- maintain reverse title index for O(1) DeleteNode
@@ -810,6 +818,7 @@ function pfMap:DeleteNode(addon, title)
     pfMap.titleIndex = {}
     pfMap.tooltipIndex = {}
     pfMap.dirtyNodes = {}
+    pfMap.dirtyMinimapNodes = {}
     pfMap.dirtyMaps = {}
   elseif not title then
     -- wipe all nodes for this addon; clean up both reverse indexes
@@ -844,6 +853,7 @@ function pfMap:DeleteNode(addon, title)
             else
               -- coord survives with remaining titles; reprocess on next UpdateNodes
               pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
+              pfMap.dirtyMinimapNodes[pfMap.nodes[addon][map][coords]] = true
               pfMap.dirtyMaps[map] = true
             end
           end
@@ -1713,9 +1723,9 @@ function pfMap:UpdateMinimap()
           -- skip expensive UpdateNode work (highlightdb rebuild, node iteration,
           -- size calls) when this pin is already showing the correct node and
           -- nothing has been added or removed from it since the last render.
-          if pin.node ~= node or pfMap.dirtyNodes[node] then
+          if pin.node ~= node or pfMap.dirtyMinimapNodes[node] then
             pfMap:UpdateNode(pin, node, color, "minimap", distance)
-            pfMap.dirtyNodes[node] = nil
+            pfMap.dirtyMinimapNodes[node] = nil
           end
 
           if pin.hl:IsShown() then
