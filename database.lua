@@ -2120,16 +2120,35 @@ end
 -- Try to guess the quest ID based on the questlog ID
 -- Returns possible quest IDs
 function pfDatabase:GetQuestIDs(qid, preserveQuestLogSelection)
+  local title, level, _, header = compat.GetQuestLogTitle(qid)
+  if header or not title then
+    return
+  end
+
   -- Some enhanced 1.12 clients expose GetQuestLinkForLogIndex instead of
   -- GetQuestLink. Both provide the exact ID without selecting the quest-log
-  -- row, which avoids a visible hitch on same-name quest chains.
+  -- row, which avoids a visible hitch on same-name quest chains. Custom
+  -- servers can expose an internal ID that differs from the canonical ID in
+  -- the database, so only trust it when its title also matches.
   local getQuestLink = GetQuestLink or GetQuestLinkForLogIndex
   if getQuestLink then
     local ok, questLink = pcall(getQuestLink, qid)
     if ok and questLink then
       local _, _, id = strfind(questLink, "|c.*|Hquest:([%d]+):([-]?[%d]+)|h%[(.*)%]|h|r")
       if id then
-        return { [1] = tonumber(id) }
+        id = tonumber(id)
+        local linkedQuest = quests[id]
+        local linkedTitleMatches
+        for locale in pairs(pfDB.locales or {}) do
+          local localeData = pfDB.quests[locale] or pfDB.quests[locale .. "-turtle"]
+          if localeData and localeData[id] and localeData[id].T == title then
+            linkedTitleMatches = true
+            break
+          end
+        end
+        if linkedQuest and linkedTitleMatches then
+          return { [1] = id }
+        end
       end
     end
   end
@@ -2139,11 +2158,6 @@ function pfDatabase:GetQuestIDs(qid, preserveQuestLogSelection)
   -- clients, SelectQuestLogEntry during login/quest acceptance can crash the
   -- native client instead of returning a Lua error. The selection fallback is
   -- only needed when multiple database quests share the same title.
-  local title, level, _, header = compat.GetQuestLogTitle(qid)
-  if header or not title then
-    return
-  end
-
   pfQuest_questcache = pfQuest_questcache or {}
   local titleKey = "title-v2:" .. title .. ":" .. (level or "")
   if pfQuest_questcache[titleKey] and pfQuest_questcache[titleKey][1] then
@@ -2151,6 +2165,30 @@ function pfDatabase:GetQuestIDs(qid, preserveQuestLogSelection)
   end
 
   local titleCandidates = pfDatabase.nameIndex.quests and pfDatabase.nameIndex.quests[title]
+  if not titleCandidates then
+    -- A server may return English quest text while the client and pfQuest use
+    -- another locale. Search every loaded locale before treating it as an
+    -- unknown quest. This also maps alternate server IDs back to the canonical
+    -- database ID used by objectives, starters and enders.
+    local candidates = {}
+    local seen = {}
+    for locale in pairs(pfDB.locales or {}) do
+      -- Unused base locales are released to save memory. Database extensions
+      -- load afterward and may still provide their locale-specific delta.
+      local localeData = pfDB.quests[locale] or pfDB.quests[locale .. "-turtle"]
+      if localeData then
+        for id, data in pairs(localeData) do
+          if quests[id] and data.T == title and not seen[id] then
+            seen[id] = true
+            table.insert(candidates, id)
+          end
+        end
+      end
+    end
+    if candidates[1] then
+      titleCandidates = candidates
+    end
+  end
   local exactID = titleCandidates and titleCandidates[1]
   local exactCount = titleCandidates and table.getn(titleCandidates) or 0
 

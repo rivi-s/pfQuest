@@ -1,5 +1,13 @@
 # pfQuest base patch notes
 
+## 8.0.29 — 2026-09-13
+
+- Positioned Level Range directly below All Quests and moved Modern Map Markers controls beneath it when installed.
+- Fixed Level Range rendering with pfUI skins while keeping the selector independent of World Map zoom.
+- Kept Display Low Level Quest Givers effective when an optional Level Range is selected.
+- Renamed the settings action to Save & Close and restored reload prompts for settings that only apply at load time.
+- Resolved quests through their canonical database record when a custom server supplies a different quest-link ID.
+
 ## 8.0.28 — 2026-09-13
 
 - Cached ClassicAPI map-area data to eliminate continuous World Map allocation churn.
