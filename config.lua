@@ -296,7 +296,7 @@ end)
 pfQuestConfig.save.text = pfQuestConfig.save:CreateFontString("Caption", "LOW", "GameFontWhite")
 pfQuestConfig.save.text:SetAllPoints(pfQuestConfig.save)
 pfQuestConfig.save.text:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
-pfQuestConfig.save.text:SetText(L["Close"])
+pfQuestConfig.save.text:SetText(L["Save & Close"])
 pfUI.api.SkinButton(pfQuestConfig.save)
 
 -- Most settings already update their saved value as soon as the control is
