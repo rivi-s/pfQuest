@@ -858,11 +858,7 @@ function pfQuest:AddWorldMapIntegration()
         info.text = mode.text
         local value = mode.value
         info.value = value
-        -- Evaluate when the menu opens. Legacy menu rows are reused, so a
-        -- one-time boolean can display the previous selection.
-        info.checked = function()
-          return (pfQuest_config["questpinlevelrange"] or "all") == value
-        end
+        info.checked = selected == value
         info.func = function()
           -- Use the clicked button's value. Legacy dropdown rows are reused,
           -- so a closure can otherwise retain a previous entry's value.
@@ -1006,6 +1002,18 @@ function pfQuest:AddWorldMapIntegration()
     ApplyMapLevelButtonSkin()
     SyncMapLevelScale()
   end)
+
+  -- The legacy dropdown reuses its list rows. Refresh their boolean checked
+  -- state immediately before each open, rather than during a selection.
+  local levelToggle = pfQuest.mapLevelButton.Button or _G["pfQuestMapLevelDropdownButton"]
+  if levelToggle and not levelToggle.pfQuestLevelMenuHook then
+    local previous = levelToggle:GetScript("OnClick")
+    levelToggle:SetScript("OnClick", function()
+      pfQuest.mapLevelButton:UpdateMenu()
+      if previous then previous() end
+    end)
+    levelToggle.pfQuestLevelMenuHook = true
+  end
 
   pfQuest.mapLevelButton.lastMapScale = nil
   pfQuest.mapLevelButton:SetScript("OnUpdate", function()
