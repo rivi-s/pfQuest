@@ -856,11 +856,14 @@ function pfQuest:AddWorldMapIntegration()
         -- state from the previously opened map menu.
         local info = {}
         info.text = mode.text
-        info.value = mode.value
-        info.checked = selected == mode.value
+        local value = mode.value
+        info.value = value
+        info.checked = selected == value
         info.func = function()
-          pfQuest_config["questpinlevelrange"] = this.value
-          UIDropDownMenu_SetSelectedID(pfQuest.mapLevelButton, this:GetID(), 0)
+          pfQuest_config["questpinlevelrange"] = value
+          -- Rebuild the menu so legacy UIDropDownMenu does not retain the
+          -- prior entry's checkmark or label after a selection.
+          pfQuest.mapLevelButton:UpdateMenu()
           pfQuest:ResetAll()
         end
         if selected == mode.value then selectedID = index end
