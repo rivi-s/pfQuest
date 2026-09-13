@@ -1120,7 +1120,11 @@ QuestLog_Update = function()
   end
 
   if pfQuest_config["questlogbuttons"] == "1" then
-    local questids = pfDatabase:GetQuestIDs(GetQuestLogSelection())
+    -- Completion forces a QuestLog_Update while the log is visible. Keep this
+    -- button refresh read-only so resolving an ambiguous quest cannot select a
+    -- hidden row and expand its collapsed category.
+    local preserveSelection = QuestLogFrame and QuestLogFrame:IsShown()
+    local questids = pfDatabase:GetQuestIDs(GetQuestLogSelection(), preserveSelection)
     if questids and questids[1] and tonumber(questids[1]) and pfQuest.questlog[questids[1]] then
       pfQuest.buttonOnline:SetID(questids[1])
       pfQuest.buttonOnline:Show()

@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.30 — 2026-09-13
+
+- Kept collapsed Quest Log categories closed when completing quests.
+
 ## 8.0.29 — 2026-09-13
 
 - Positioned Level Range directly below All Quests and moved Modern Map Markers controls beneath it when installed.
