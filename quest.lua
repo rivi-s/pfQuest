@@ -858,9 +858,11 @@ function pfQuest:AddWorldMapIntegration()
         info.text = mode.text
         local value = mode.value
         info.value = value
-        -- This menu owns its checked state. Stock selected IDs persist across
-        -- legacy menu instances and can point at the wrong entry.
-        info.checked = selected == value
+        -- Evaluate when the menu opens. Legacy menu rows are reused, so a
+        -- one-time boolean can display the previous selection.
+        info.checked = function()
+          return (pfQuest_config["questpinlevelrange"] or "all") == value
+        end
         info.func = function()
           pfQuest_config["questpinlevelrange"] = value
           -- The legacy menu must be closed before its entries are rebuilt;
