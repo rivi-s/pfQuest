@@ -940,7 +940,11 @@ function pfQuest:AddWorldMapIntegration()
         local r, g, b, a = mapText:GetTextColor()
         text:SetTextColor(r, g, b, a)
       end
-      text:Show()
+      if pfQuest.mapLevelButton.pfUISkinned then
+        text:Hide()
+      else
+        text:Show()
+      end
     end
 
   end
