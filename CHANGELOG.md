@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.28 — 2026-09-13
+
+- Cached ClassicAPI map-area data to eliminate continuous World Map allocation churn.
+
 ## 8.0.27 — 2026-09-13
 
 - Kept collapsed Quest Log headers and tracker visibility stable through quest progress and completion updates.
