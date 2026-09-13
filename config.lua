@@ -281,7 +281,15 @@ pfUI.api.SkinButton(pfQuestConfig.close, 1, 0.5, 0.5)
 local function CloseConfigWindow()
   pfQuestConfig:Hide()
   if pfQuestConfig.reloadRequired then
-    StaticPopup_Show("PFQUEST_RELOAD_REQUIRED")
+    if pfUI and pfUI.api and pfUI.api.CreateQuestionDialog then
+      pfUI.api.CreateQuestionDialog(
+        "This setting requires a UI reload to take effect.",
+        { "Reload UI", ReloadUI },
+        { "Later", function() end }
+      )
+    else
+      StaticPopup_Show("PFQUEST_RELOAD_REQUIRED")
+    end
   end
 end
 pfQuestConfig.close:SetScript("OnClick", function()
