@@ -371,7 +371,11 @@ local reloadSettings = {
   questlogbuttons = true,
 }
 
-local function UpdateReloadRequired()
+function pfQuestConfig:IsReloadSetting(config)
+  return reloadSettings[config]
+end
+
+function pfQuestConfig:UpdateReloadRequired()
   pfQuestConfig.reloadRequired = nil
   if not pfQuestConfig.loadedReloadSettings then return end
   for config in pairs(reloadSettings) do
@@ -505,7 +509,7 @@ function pfQuestConfig:CreateConfigEntries(config)
           SetCheckboxVisual(this, checked)
 
           if reloadSettings[this.config] then
-            UpdateReloadRequired()
+            pfQuestConfig:UpdateReloadRequired()
           elseif this.config == "showtracker" and pfQuest.tracker then
             if pfQuest_config[this.config] == "1" then
               pfQuest.tracker:Show()
