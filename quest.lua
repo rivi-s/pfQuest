@@ -940,11 +940,7 @@ function pfQuest:AddWorldMapIntegration()
         local r, g, b, a = mapText:GetTextColor()
         text:SetTextColor(r, g, b, a)
       end
-      if pfQuest.mapLevelButton.pfUISkinned then
-        text:Hide()
-      else
-        text:Show()
-      end
+      text:Show()
     end
 
   end
@@ -954,33 +950,6 @@ function pfQuest:AddWorldMapIntegration()
     if not pfQuest.mapLevelButton.pfUISkinned then
       pfUI.api.SkinDropDown(pfQuest.mapLevelButton, nil, nil, nil, true)
       pfQuest.mapLevelButton.pfUISkinned = true
-    end
-    -- The skinned button is a higher-level child of the dropdown and remains
-    -- above the World Map texture. Keep only the caption on that child; pfUI
-    -- still owns the control's backdrop, border, arrow, and highlight.
-    local button = pfQuest.mapLevelButton.Button or _G["pfQuestMapLevelDropdownButton"]
-    local mapText = pfQuest.mapButton.Text or _G["pfQuestMapDropdownText"]
-    if button then
-      if not button.pfQuestLabel then
-        button.pfQuestLabel = button:CreateFontString(nil, "OVERLAY")
-      end
-      local label = button.pfQuestLabel
-      local font, size, flags
-      if mapText and mapText.GetFont then
-        font, size, flags = mapText:GetFont()
-        local r, g, b, a = mapText:GetTextColor()
-        label:SetTextColor(r, g, b, a)
-      end
-      if not font and GameFontNormal then
-        font, size, flags = GameFontNormal:GetFont()
-      end
-      if font then label:SetFont(font, size, flags) end
-      label:ClearAllPoints()
-      label:SetPoint("RIGHT", button, "RIGHT", -42, 0)
-      label:SetWidth(110)
-      label:SetJustifyH("RIGHT")
-      label:SetText("Level Range")
-      label:Show()
     end
   end
 
