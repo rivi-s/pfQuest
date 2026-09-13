@@ -837,21 +837,25 @@ function pfQuest:AddWorldMapIntegration()
   pfQuest.mapLevelButton = CreateFrame("Frame", "pfQuestMapLevelDropdown", WorldMapFrame, "UIDropDownMenuTemplate")
   pfQuest.mapLevelButton.point = "TOPLEFT"
   pfQuest.mapLevelButton.relativePoint = "BOTTOMLEFT"
+  pfQuest.mapLevelButton:SetFrameStrata(pfQuest.mapButton:GetFrameStrata())
+  pfQuest.mapLevelButton:SetFrameLevel(pfQuest.mapButton:GetFrameLevel() + 10)
+  local mapLevelTemplateButton = pfQuest.mapLevelButton.Button or _G["pfQuestMapLevelDropdownButton"]
+  if mapLevelTemplateButton then
+    mapLevelTemplateButton:SetFrameLevel(pfQuest.mapLevelButton:GetFrameLevel() + 2)
+  end
 
   local function PositionMapLevelButton()
-    local anchor = pfQuest.mapButton
-    local findMarkers = _G["ModernMapMarkersFind_Blizz"]
-    local filterMarkers = _G["ModernMapMarkersFilter_Blizz"]
-    if findMarkers and findMarkers:IsShown() then
-      anchor = findMarkers
-    elseif filterMarkers and filterMarkers:IsShown() then
-      anchor = filterMarkers
+    if pfQuest.mapLevelButton.layoutAnchor ~= pfQuest.mapButton then
+      pfQuest.mapLevelButton.layoutAnchor = pfQuest.mapButton
+      pfQuest.mapLevelButton:ClearAllPoints()
+      pfQuest.mapLevelButton:SetPoint("TOPRIGHT", pfQuest.mapButton, "BOTTOMRIGHT", 0, 0)
     end
 
-    if pfQuest.mapLevelButton.layoutAnchor ~= anchor then
-      pfQuest.mapLevelButton.layoutAnchor = anchor
-      pfQuest.mapLevelButton:ClearAllPoints()
-      pfQuest.mapLevelButton:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, 0)
+    local filterMarkers = _G["ModernMapMarkersFilter_Blizz"]
+    if filterMarkers and filterMarkers.pfQuestLayoutAnchor ~= pfQuest.mapLevelButton then
+      filterMarkers.pfQuestLayoutAnchor = pfQuest.mapLevelButton
+      filterMarkers:ClearAllPoints()
+      filterMarkers:SetPoint("TOPRIGHT", pfQuest.mapLevelButton, "BOTTOMRIGHT", 0, 0)
     end
   end
   PositionMapLevelButton()
