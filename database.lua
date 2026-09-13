@@ -1840,14 +1840,19 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
     end
     local maximum = ({ orange = 4, yellow = 3, green = 2, gray = 1 })[levelRange]
     if maximum and rank > maximum then return end
-  else
-    -- With no Level Range selected, preserve normal pfQuest behavior.
-    if quests[id]["lvl"] and quests[id]["lvl"] < plevel - 4 and pfQuest_config["showlowlevel"] == "0" then
-      return
-    end
+  elseif levelRange == "off" then
+    -- With no Level Range selected, preserve normal pfQuest high-level
+    -- behavior. The low-level preference is applied independently below.
     if quests[id]["min"] and quests[id]["min"] > plevel + (pfQuest_config["showhighlevel"] == "1" and 3 or 0) then
       return
     end
+  end
+
+  -- This remains authoritative even while an optional Level Range is active.
+  -- Otherwise selecting a range makes the existing checkbox appear broken on
+  -- both the World Map and minimap.
+  if quests[id]["lvl"] and quests[id]["lvl"] < plevel - 4 and pfQuest_config["showlowlevel"] == "0" then
+    return
   end
 
   -- hide event quests
