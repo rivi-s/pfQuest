@@ -939,30 +939,6 @@ function pfQuest:AddWorldMapIntegration()
       text:Show()
     end
 
-    -- pfUI skins the legacy dropdown before this text is drawn. On the 1.12
-    -- client its template caption can remain blank afterward, so keep a
-    -- separate caption above the skin while leaving all visual styling to
-    -- SkinDropDown.
-    if not pfQuest.mapLevelButton.pfQuestCaption then
-      pfQuest.mapLevelButton.pfQuestCaption = pfQuest.mapLevelButton:CreateFontString(nil, "OVERLAY")
-    end
-    local caption = pfQuest.mapLevelButton.pfQuestCaption
-    local captionFont, captionSize, captionFlags
-    if mapText and mapText.GetFont then
-      captionFont, captionSize, captionFlags = mapText:GetFont()
-      local r, g, b, a = mapText:GetTextColor()
-      caption:SetTextColor(r, g, b, a)
-    end
-    if not captionFont and GameFontNormal then
-      captionFont, captionSize, captionFlags = GameFontNormal:GetFont()
-    end
-    if captionFont then caption:SetFont(captionFont, captionSize, captionFlags) end
-    caption:ClearAllPoints()
-    caption:SetPoint("RIGHT", pfQuest.mapLevelButton, "RIGHT", -42, 0)
-    caption:SetWidth(110)
-    caption:SetJustifyH("RIGHT")
-    caption:SetText("Level Range")
-    caption:Show()
   end
 
   local function ApplyMapLevelButtonSkin()
@@ -970,6 +946,33 @@ function pfQuest:AddWorldMapIntegration()
     if not pfQuest.mapLevelButton.pfUISkinned then
       pfUI.api.SkinDropDown(pfQuest.mapLevelButton, nil, nil, nil, true)
       pfQuest.mapLevelButton.pfUISkinned = true
+    end
+    -- The skinned button is a higher-level child of the dropdown and remains
+    -- above the World Map texture. Keep only the caption on that child; pfUI
+    -- still owns the control's backdrop, border, arrow, and highlight.
+    local button = pfQuest.mapLevelButton.Button or _G["pfQuestMapLevelDropdownButton"]
+    local mapText = pfQuest.mapButton.Text or _G["pfQuestMapDropdownText"]
+    if button then
+      if not button.pfQuestLabel then
+        button.pfQuestLabel = button:CreateFontString(nil, "OVERLAY")
+      end
+      local label = button.pfQuestLabel
+      local font, size, flags
+      if mapText and mapText.GetFont then
+        font, size, flags = mapText:GetFont()
+        local r, g, b, a = mapText:GetTextColor()
+        label:SetTextColor(r, g, b, a)
+      end
+      if not font and GameFontNormal then
+        font, size, flags = GameFontNormal:GetFont()
+      end
+      if font then label:SetFont(font, size, flags) end
+      label:ClearAllPoints()
+      label:SetPoint("RIGHT", button, "RIGHT", -42, 0)
+      label:SetWidth(110)
+      label:SetJustifyH("RIGHT")
+      label:SetText("Level Range")
+      label:Show()
     end
   end
 
