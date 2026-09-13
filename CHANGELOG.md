@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.26 — 2026-09-12
+
+- Renamed the World Map filter to Level Range and made All Levels show every available quest.
+- Kept minimap objectives, quest starters, and quest enders updating while the World Map is open.
+
 ## 8.0.25 — 2026-09-12
 
 - Added live nearest-first and reversible level sorting to the quest tracker.
