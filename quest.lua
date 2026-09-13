@@ -863,8 +863,9 @@ function pfQuest:AddWorldMapIntegration()
         info.checked = selected == value
         info.func = function()
           pfQuest_config["questpinlevelrange"] = value
-          -- Rebuild the menu so legacy UIDropDownMenu does not retain the
-          -- prior entry's checkmark or label after a selection.
+          -- The legacy menu must be closed before its entries are rebuilt;
+          -- reinitializing an open menu leaves later selections stale.
+          CloseDropDownMenus()
           pfQuest.mapLevelButton:UpdateMenu()
           pfQuest:ResetAll()
         end
