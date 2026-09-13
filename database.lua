@@ -1836,14 +1836,6 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
     end
     local maximum = ({ orange = 4, yellow = 3, green = 2, gray = 1 })[levelRange]
     if maximum and rank > maximum then return end
-  else
-    -- Keep the existing high/low-level quest-giver settings for All Levels.
-    if quests[id]["lvl"] and quests[id]["lvl"] < plevel - 4 and pfQuest_config["showlowlevel"] == "0" then
-      return
-    end
-    if quests[id]["min"] and quests[id]["min"] > plevel + (pfQuest_config["showhighlevel"] == "1" and 3 or 0) then
-      return
-    end
   end
 
   -- hide event quests
