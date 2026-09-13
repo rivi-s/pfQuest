@@ -858,9 +858,9 @@ function pfQuest:AddWorldMapIntegration()
         info.text = mode.text
         local value = mode.value
         info.value = value
-        -- The legacy dropdown applies its own single selected mark below.
-        -- Supplying another checked state produces stale duplicate marks.
-        info.checked = false
+        -- This menu owns its checked state. Stock selected IDs persist across
+        -- legacy menu instances and can point at the wrong entry.
+        info.checked = selected == value
         info.func = function()
           pfQuest_config["questpinlevelrange"] = value
           -- Rebuild the menu so legacy UIDropDownMenu does not retain the
@@ -884,7 +884,6 @@ function pfQuest:AddWorldMapIntegration()
       UIDropDownMenu_SetButtonWidth(125, pfQuest.mapLevelButton)
       UIDropDownMenu_JustifyText("RIGHT", pfQuest.mapLevelButton)
     end
-    UIDropDownMenu_SetSelectedID(pfQuest.mapLevelButton, pfQuest.mapLevelButton.current)
     pfQuest.mapLevelButton.currentLabel = levelModes[selectedID].label
     -- Moving this control out of the map canvas prevents the legacy template
     -- from repainting its selected caption automatically.
