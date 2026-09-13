@@ -31,15 +31,24 @@ end
 -- Stock GetMapZones omits capital-city maps. ClassicAPI exposes the current
 -- map folder's AreaTable ID, which lets pfQuest use the same zone key for a
 -- city map as it does for that city's database nodes.
+local mapAreaIDs
 pfQuestCompat.GetCurrentMapAreaID = function()
   if not optional.classicapi or not C_Map or type(C_Map.GetMapAreaIDs) ~= "function" then return nil end
   local mapName = GetMapInfo and GetMapInfo()
   if not mapName then return nil end
 
-  local ok, areas = pcall(C_Map.GetMapAreaIDs)
-  if ok and type(areas) == "table" then
-    return areas[mapName]
+  -- ClassicAPI builds and returns the full map-name table on every call.
+  -- GetMapID is used by the World Map's OnUpdate path, so fetching it there
+  -- continuously creates several megabytes of short-lived tables per minute.
+  -- Area IDs are static for the session; retain the first successful result.
+  if not mapAreaIDs then
+    local ok, areas = pcall(C_Map.GetMapAreaIDs)
+    if ok and type(areas) == "table" then
+      mapAreaIDs = areas
+    end
   end
+
+  return mapAreaIDs and mapAreaIDs[mapName] or nil
 end
 
 pfQuestCompat.GetMapRectOnMap = function(mapid, topmapid)
