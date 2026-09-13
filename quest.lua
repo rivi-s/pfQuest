@@ -858,7 +858,9 @@ function pfQuest:AddWorldMapIntegration()
         info.text = mode.text
         local value = mode.value
         info.value = value
-        info.checked = selected == value
+        -- The legacy dropdown applies its own single selected mark below.
+        -- Supplying another checked state produces stale duplicate marks.
+        info.checked = false
         info.func = function()
           pfQuest_config["questpinlevelrange"] = value
           -- Rebuild the menu so legacy UIDropDownMenu does not retain the
