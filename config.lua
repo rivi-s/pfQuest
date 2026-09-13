@@ -278,8 +278,14 @@ pfQuestConfig.close.texture:SetPoint("BOTTOMRIGHT", pfQuestConfig.close, "BOTTOM
 
 pfQuestConfig.close.texture:SetVertexColor(1, 0.25, 0.25, 1)
 pfUI.api.SkinButton(pfQuestConfig.close, 1, 0.5, 0.5)
+local function CloseConfigWindow()
+  pfQuestConfig:Hide()
+  if pfQuestConfig.reloadRequired then
+    StaticPopup_Show("PFQUEST_RELOAD_REQUIRED")
+  end
+end
 pfQuestConfig.close:SetScript("OnClick", function()
-  this:GetParent():Hide()
+  CloseConfigWindow()
 end)
 
 pfQuestConfig.welcome = CreateFrame("Button", "pfQuestConfigWelcome", pfQuestConfig)
@@ -301,7 +307,7 @@ pfQuestConfig.save:SetWidth(160)
 pfQuestConfig.save:SetHeight(28)
 pfQuestConfig.save:SetPoint("BOTTOMRIGHT", -10, 10)
 pfQuestConfig.save:SetScript("OnClick", function()
-  pfQuestConfig:Hide()
+  CloseConfigWindow()
 end)
 pfQuestConfig.save.text = pfQuestConfig.save:CreateFontString("Caption", "LOW", "GameFontWhite")
 pfQuestConfig.save.text:SetAllPoints(pfQuestConfig.save)
@@ -356,6 +362,17 @@ local reloadSettings = {
   minimapbutton = true,
   questlogbuttons = true,
 }
+
+local function UpdateReloadRequired()
+  pfQuestConfig.reloadRequired = nil
+  if not pfQuestConfig.loadedReloadSettings then return end
+  for config in pairs(reloadSettings) do
+    if pfQuest_config[config] ~= pfQuestConfig.loadedReloadSettings[config] then
+      pfQuestConfig.reloadRequired = true
+      return
+    end
+  end
+end
 
 local mapRefreshSettings = {
   showspawn = true,
@@ -480,7 +497,7 @@ function pfQuestConfig:CreateConfigEntries(config)
           SetCheckboxVisual(this, checked)
 
           if reloadSettings[this.config] then
-            StaticPopup_Show("PFQUEST_RELOAD_REQUIRED")
+            UpdateReloadRequired()
           elseif this.config == "showtracker" and pfQuest.tracker then
             if pfQuest_config[this.config] == "1" then
               pfQuest.tracker:Show()
@@ -618,6 +635,11 @@ pfQuestConfig:RegisterEvent("ADDON_LOADED")
 pfQuestConfig:SetScript("OnEvent", function()
   if arg1 == "pfQuest" or arg1 == "pfQuest-tbc" or arg1 == "pfQuest-wotlk" then
     pfQuestConfig:LoadConfig()
+    pfQuestConfig.loadedReloadSettings = {}
+    for config in pairs(reloadSettings) do
+      pfQuestConfig.loadedReloadSettings[config] = pfQuest_config[config]
+    end
+    pfQuestConfig.reloadRequired = nil
     pfQuestConfig:MigrateHistory()
     pfQuestConfig:CreateConfigEntries(pfQuest_defconfig)
 
