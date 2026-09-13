@@ -441,7 +441,11 @@ function pfQuest:UpdateQuestlog()
     local watched, questid, state
 
     if title and not header then
-      questid = pfDatabase:GetQuestIDs(qlogid)
+      -- A legacy same-title lookup can select hidden quest rows. While the
+      -- Quest Log is open, keep background refreshes read-only so collapsed
+      -- categories remain collapsed through progress and completion updates.
+      local preserveSelection = QuestLogFrame and QuestLogFrame:IsShown()
+      questid = pfDatabase:GetQuestIDs(qlogid, preserveSelection)
       questid = questid and tonumber(questid[1]) or title
       watched = IsQuestWatched(qlogid)
 

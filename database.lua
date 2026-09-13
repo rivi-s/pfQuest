@@ -2102,7 +2102,7 @@ end
 -- GetQuestIDs
 -- Try to guess the quest ID based on the questlog ID
 -- Returns possible quest IDs
-function pfDatabase:GetQuestIDs(qid)
+function pfDatabase:GetQuestIDs(qid, preserveQuestLogSelection)
   -- Some enhanced 1.12 clients expose GetQuestLinkForLogIndex instead of
   -- GetQuestLink. Both provide the exact ID without selecting the quest-log
   -- row, which avoids a visible hitch on same-name quest chains.
@@ -2140,6 +2140,29 @@ function pfDatabase:GetQuestIDs(qid)
   if exactCount == 1 then
     pfQuest_questcache[titleKey] = { exactID }
     return pfQuest_questcache[titleKey]
+  end
+
+  -- Background quest-log scans must not select a hidden quest row while the
+  -- Quest Log is visible. On legacy 1.12 clients that selection expands the
+  -- row's collapsed category. Reuse the active quest mapping when possible;
+  -- otherwise let the caller keep its title fallback until a non-UI scan can
+  -- resolve the ambiguous title safely.
+  if preserveQuestLogSelection then
+    local existingID
+    for id, data in pairs(pfQuest.questlog or {}) do
+      if type(id) == "number" and data and data.title == title then
+        if data.qlogid == qid then
+          return { [1] = id }
+        elseif existingID and existingID ~= id then
+          existingID = nil
+          break
+        else
+          existingID = id
+        end
+      end
+    end
+    if existingID then return { [1] = existingID } end
+    return
   end
 
   local oldID = GetQuestLogSelection()
