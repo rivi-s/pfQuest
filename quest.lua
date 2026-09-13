@@ -958,8 +958,8 @@ function pfQuest:AddWorldMapIntegration()
 
   pfQuest.mapLevelButton:SetScript("OnShow", function()
     PositionMapLevelButton()
-    pfQuest.mapLevelButton:UpdateMenu()
     ApplyMapLevelButtonSkin()
+    pfQuest.mapLevelButton:UpdateMenu()
     SyncMapLevelScale()
   end)
 
