@@ -603,6 +603,14 @@ function tracker.ButtonEvent(self)
       return
     end
     local objectives = GetNumQuestLeaderBoards(qlogid)
+    -- A quest button can retain the node texture captured before the client
+    -- reports its final state. Refresh the completion icon from the current
+    -- quest log on every event; objective-free talk/report quests are ready
+    -- by the same rule used by pfQuest's map tooltip and objective state.
+    if complete or objectives == 0 then
+      self.icon:SetTexture(pfQuestConfig.path .. "\\img\\complete_c")
+      self.icon:SetVertexColor(1, 1, 1, 1)
+    end
     local watched = IsQuestWatched(qlogid)
     local color = pfQuestCompat.GetDifficultyColor(level)
     local cur, max = 0, 0

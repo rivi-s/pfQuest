@@ -173,6 +173,15 @@ pfQuest:SetScript("OnEvent", function()
     else
       return
     end
+  elseif event == "QUEST_TURNED_IN" then
+    -- ClassicAPI reports the completed quest ID directly. Record it here so
+    -- instant auto turn-ins are not lost when a quest enters and leaves the
+    -- log between two legacy QUEST_LOG_UPDATE scans.
+    local questid = tonumber(arg1)
+    if questid then
+      pfQuest_history[questid] = { time(), UnitLevel("player") }
+      if pfJournal then pfJournal.dirty = true end
+    end
   elseif event == "SKILL_LINES_CHANGED" then
     -- Use table.concat to avoid string concatenation garbage
     local skillParts = {}

@@ -1382,6 +1382,33 @@ function pfMap:UpdateNodes()
     end
   end
 
+  -- Quest events also fire while the world map is closed. Rebuilding every
+  -- hidden world-map frame in that state caused a visible accept/abandon
+  -- hitch. Refresh only the quest tracker here; minimap pins have their own
+  -- updater, and dirtyMaps keeps the full world-map render pending until the
+  -- player actually opens it.
+  if not WorldMapFrame:IsShown() then
+    local questNodes = pfMap.nodes.PFQUEST and pfMap.nodes.PFQUEST[map]
+    for coords, node in pairs(questNodes or {}) do
+      local x, y
+      if coord_cache[coords] then
+        x, y = coord_cache[coords][1], coord_cache[coords][2]
+      else
+        local _, _, strx, stry = strfind(coords, "(.*)|(.*)")
+        x, y = strx + 0, stry + 0
+        coord_cache[coords] = { x, y }
+      end
+      for title, meta in pairs(node) do
+        pfQuest.tracker.ButtonAdd(title, meta)
+        pfQuest.tracker.RegisterQuestPoint(title, meta, x, y)
+      end
+    end
+    if pfQuest.tracker and pfQuest.tracker.DoLayout then
+      pfQuest.tracker.DoLayout()
+    end
+    return
+  end
+
   -- A tracker/UI refresh can call UpdateNodes without changing any map node.
   -- Keep the existing route in that case; resetting it redraws the path every
   -- couple of seconds even though its inputs are unchanged.

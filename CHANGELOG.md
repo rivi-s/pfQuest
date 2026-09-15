@@ -1,5 +1,11 @@
 # pfQuest base patch notes
 
+## 8.0.31 — 2026-09-14
+
+- Reduced frame hitches when accepting, completing, or abandoning quests while the World Map is closed.
+- Refreshed tracker completion icons correctly, including quests without objectives.
+- Recorded instant quest turn-ins in quest history when ClassicAPI supplies the completed quest ID.
+
 ## 8.0.30 — 2026-09-13
 
 - Kept collapsed Quest Log categories closed when completing quests.
