@@ -1838,8 +1838,10 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
     else
       rank = 1 -- grey
     end
-    local maximum = ({ orange = 4, yellow = 3, green = 2, gray = 1 })[levelRange]
-    if maximum and rank > maximum then return end
+    local threshold = ({ red = 5, orange = 4, yellow = 3, green = 2, gray = 1 })[levelRange]
+    local direction = pfQuest_config["questpinleveldirection"] == "higher" and "higher" or "lower"
+    if threshold and direction == "lower" and rank > threshold then return end
+    if threshold and direction == "higher" and rank < threshold then return end
   elseif levelRange == "off" then
     -- With no Level Range selected, preserve normal pfQuest high-level
     -- behavior. The low-level preference is applied independently below.

@@ -1,5 +1,12 @@
 # pfQuest base patch notes
 
+## 8.0.32 — 2026-09-15
+
+- Added reversible World Map Level Range filtering with a Red threshold, Higher and Lower modes, a direction indicator, and right-click help.
+- Prevented Level Range from overwriting profession dropdown labels.
+- Restored route-arrow points while the World Map is closed without rebuilding hidden map frames.
+- Updated the in-game version notice to point to the maintained pfQuest repository.
+
 ## 8.0.31 — 2026-09-14
 
 - Reduced frame hitches when accepting, completing, or abandoning quests while the World Map is closed.

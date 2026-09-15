@@ -870,48 +870,59 @@ function pfQuest:AddWorldMapIntegration()
   PositionMapLevelButton()
 
   local levelModes = {
-    { value = "orange", text = "|cffff8040Orange & Lower|r", label = "Orange & Lower" },
-    { value = "yellow", text = "|cffffff00Yellow & Lower|r", label = "Yellow & Lower" },
-    { value = "green", text = "|cff40c040Green & Lower|r", label = "Green & Lower" },
-    { value = "gray", text = "|cff999999Grey|r", label = "Grey" },
+    { value = "red", name = "Red", color = "|cffff2020" },
+    { value = "orange", name = "Orange", color = "|cffff8040" },
+    { value = "yellow", name = "Yellow", color = "|cffffff00" },
+    { value = "green", name = "Green", color = "|cff40c040" },
+    { value = "gray", name = "Grey", color = "|cff999999" },
   }
 
-  function pfQuest.mapLevelButton:UpdateMenu()
+  local function GetSelectedLevelRange()
     local selected = pfQuest_config["questpinlevelrange"] or "off"
     if selected == "all" then
       selected = "off"
       pfQuest_config["questpinlevelrange"] = "off"
     end
-    local selectedID
-    local function CreateEntries()
-      for index, mode in ipairs(levelModes) do
-        -- Match the established World Map selector's entry construction.
-        -- On the legacy client, the shared CreateInfo table can retain visual
-        -- state from the previously opened map menu.
-        local info = {}
-        info.text = mode.text
-        local value = mode.value
-        info.value = value
-        info.checked = selected == value
-        info.func = function()
-          -- Use the clicked button's value. Legacy dropdown rows are reused,
-          -- so a closure can otherwise retain a previous entry's value.
-          local selectedValue = this and this.value
-          if not selectedValue then return end
-          -- Clicking the active range again disables the feature and restores
-          -- normal pfQuest high/low-level filtering.
-          pfQuest_config["questpinlevelrange"] = selected == selectedValue and "off" or selectedValue
-          CloseDropDownMenus()
-          pfQuest.mapLevelButton:UpdateMenu()
-          pfQuest:ResetAll()
-        end
-        if selected == mode.value then selectedID = index end
-        UIDropDownMenu_AddButton(info)
+    return selected
+  end
+
+  local function CreateLevelRangeEntries()
+    local selected = GetSelectedLevelRange()
+    local direction = pfQuest_config["questpinleveldirection"] == "higher" and "Higher" or "Lower"
+    for index, mode in ipairs(levelModes) do
+      -- Use a fresh table because the legacy dropdown reuses its row frames.
+      local info = {}
+      info.text = mode.color .. mode.name .. " & " .. direction .. "|r"
+      info.value = mode.value
+      info.checked = selected == mode.value
+      info.func = function()
+        local selectedValue = this and this.value
+        if not selectedValue then return end
+        local current = GetSelectedLevelRange()
+        -- Clicking the active range again disables the feature and restores
+        -- normal pfQuest high/low-level filtering.
+        pfQuest_config["questpinlevelrange"] = current == selectedValue and "off" or selectedValue
+        CloseDropDownMenus()
+        pfQuest.mapLevelButton:UpdateMenu()
+        pfQuest:ResetAll()
       end
+      UIDropDownMenu_AddButton(info)
+    end
+  end
+
+  -- Register the initializer once. Reinitializing a legacy dropdown while
+  -- another window owns the shared dropdown rows can replace that window's
+  -- labels with Level Range entries (for example, profession filters).
+  UIDropDownMenu_Initialize(pfQuest.mapLevelButton, CreateLevelRangeEntries)
+
+  function pfQuest.mapLevelButton:UpdateMenu()
+    local selected = GetSelectedLevelRange()
+    local selectedID
+    for index, mode in ipairs(levelModes) do
+      if selected == mode.value then selectedID = index end
     end
 
     pfQuest.mapLevelButton.current = selectedID
-    UIDropDownMenu_Initialize(pfQuest.mapLevelButton, CreateEntries)
     if client >= 30300 then
       UIDropDownMenu_SetWidth(pfQuest.mapLevelButton, 120)
       UIDropDownMenu_SetButtonWidth(pfQuest.mapLevelButton, 125)
@@ -922,6 +933,10 @@ function pfQuest:AddWorldMapIntegration()
       UIDropDownMenu_JustifyText("RIGHT", pfQuest.mapLevelButton)
     end
     pfQuest.mapLevelButton.currentLabel = "Level Range"
+    local direction = pfQuest_config["questpinleveldirection"] == "higher" and "higher" or "lower"
+    if pfQuest.mapLevelButton.directionArrow then
+      pfQuest.mapLevelButton.directionArrow:SetText(direction == "higher" and "|cffffcc00^|r" or "|cffffcc00v|r")
+    end
     -- Moving this control out of the map canvas prevents the legacy template
     -- from repainting its selected caption automatically.
     if client >= 30300 then
@@ -954,6 +969,37 @@ function pfQuest:AddWorldMapIntegration()
 
   end
 
+  local function ToggleLevelRangeDirection()
+    local direction = pfQuest_config["questpinleveldirection"] == "higher" and "higher" or "lower"
+    pfQuest_config["questpinleveldirection"] = direction == "higher" and "lower" or "higher"
+    CloseDropDownMenus()
+    pfQuest.mapLevelButton:UpdateMenu()
+    if GetSelectedLevelRange() ~= "off" then pfQuest:ResetAll() end
+  end
+
+  local function ShowLevelRangeHelp(owner)
+    GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
+    GameTooltip:SetText("Level Range")
+    GameTooltip:AddLine("Right-click: Reverse direction", 1, 1, 1)
+    GameTooltip:Show()
+  end
+
+  -- Keep the indicator above pfUI's dropdown backdrop and make the left-side
+  -- marker itself usable for reversing the filter.
+  pfQuest.mapLevelButton.directionIndicator = CreateFrame("Button", nil, pfQuest.mapLevelButton)
+  pfQuest.mapLevelButton.directionIndicator:SetWidth(18)
+  pfQuest.mapLevelButton.directionIndicator:SetHeight(18)
+  pfQuest.mapLevelButton.directionIndicator:SetPoint("LEFT", pfQuest.mapLevelButton, "LEFT", 18, 1)
+  pfQuest.mapLevelButton.directionIndicator:SetFrameStrata(pfQuest.mapLevelButton:GetFrameStrata())
+  pfQuest.mapLevelButton.directionIndicator:SetFrameLevel(pfQuest.mapLevelButton:GetFrameLevel() + 20)
+  pfQuest.mapLevelButton.directionIndicator:RegisterForClicks("RightButtonUp")
+  pfQuest.mapLevelButton.directionIndicator:SetScript("OnClick", ToggleLevelRangeDirection)
+  pfQuest.mapLevelButton.directionIndicator:SetScript("OnEnter", function() ShowLevelRangeHelp(this) end)
+  pfQuest.mapLevelButton.directionIndicator:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  pfQuest.mapLevelButton.directionArrow = pfQuest.mapLevelButton.directionIndicator:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  pfQuest.mapLevelButton.directionArrow:SetAllPoints(pfQuest.mapLevelButton.directionIndicator)
+  pfQuest.mapLevelButton.directionArrow:SetJustifyH("CENTER")
+
   local function ApplyMapLevelButtonSkin()
     if not (pfUI and pfUI.api and pfUI.api.SkinDropDown) then return end
     if not pfQuest.mapLevelButton.pfUISkinned then
@@ -982,9 +1028,24 @@ function pfQuest:AddWorldMapIntegration()
   local levelToggle = pfQuest.mapLevelButton.Button or _G["pfQuestMapLevelDropdownButton"]
   if levelToggle and not levelToggle.pfQuestLevelMenuHook then
     local previous = levelToggle:GetScript("OnClick")
+    local previousEnter = levelToggle:GetScript("OnEnter")
+    local previousLeave = levelToggle:GetScript("OnLeave")
+    levelToggle:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     levelToggle:SetScript("OnClick", function()
+      if arg1 == "RightButton" then
+        ToggleLevelRangeDirection()
+        return
+      end
       pfQuest.mapLevelButton:UpdateMenu()
       if previous then previous() end
+    end)
+    levelToggle:SetScript("OnEnter", function()
+      if previousEnter then previousEnter() end
+      ShowLevelRangeHelp(this)
+    end)
+    levelToggle:SetScript("OnLeave", function()
+      if previousLeave then previousLeave() end
+      GameTooltip:Hide()
     end)
     levelToggle.pfQuestLevelMenuHook = true
   end

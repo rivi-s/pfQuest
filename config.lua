@@ -132,6 +132,12 @@ pfQuest_defconfig = {
     default = "off",
     type = nil,
   },
+  {
+    config = "questpinleveldirection",
+    text = nil,
+    default = "lower",
+    type = nil,
+  },
 
   { text = L["General"], default = nil, type = "header" },
   { text = L["Enable World Map Menu"], default = "1", type = "checkbox", config = "worldmapmenu" },

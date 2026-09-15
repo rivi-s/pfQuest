@@ -1389,6 +1389,11 @@ function pfMap:UpdateNodes()
   -- player actually opens it.
   if not WorldMapFrame:IsShown() then
     local questNodes = pfMap.nodes.PFQUEST and pfMap.nodes.PFQUEST[map]
+    local rebuildRoute = pfMap.lastRouteMap ~= map or pfMap.dirtyMaps[map]
+    if rebuildRoute then
+      pfQuest.route:Reset()
+      pfMap.lastRouteMap = map
+    end
     for coords, node in pairs(questNodes or {}) do
       local x, y
       if coord_cache[coords] then
@@ -1398,9 +1403,41 @@ function pfMap:UpdateNodes()
         x, y = strx + 0, stry + 0
         coord_cache[coords] = { x, y }
       end
+      local routeNode
+      local routeLayer = 0
       for title, meta in pairs(node) do
         pfQuest.tracker.ButtonAdd(title, meta)
         pfQuest.tracker.RegisterQuestPoint(title, meta, x, y)
+
+        -- Select the same highest-priority entry that UpdateNode would bind to
+        -- a visible map pin, but keep this path free of frame work.
+        meta.layer = GetLayerByTexture(meta.texture)
+        if meta.cluster and meta.priority then
+          meta.layer = meta.layer + (10 - min(meta.priority, 10))
+        end
+        if meta.spawn and (meta.layer > routeLayer or not routeNode) then
+          routeNode = meta
+          routeNode.title = title
+          routeLayer = meta.layer
+        end
+      end
+
+      if rebuildRoute and routeNode then
+        local routeEligible =
+          (pfQuest_config["routecluster"] == "1" and routeNode.layer >= 9)
+          or (pfQuest_config["routeender"] == "1" and routeNode.layer == 4)
+          or (pfQuest_config["routestarter"] == "1" and routeNode.layer == 1 and routeNode.texture)
+          or (pfQuest_config["routestarter"] == "1" and routeNode.layer == 2)
+          or routeNode.arrow == true
+        local hidden = pfQuest_config["hideunexplored"] == "1"
+          and ((explorationHandled and not exploredBounds and not pfMap:IsMapVisited(map))
+            or not IsExploredPosition(exploredBounds, x, y))
+          and not pfMap:IsVisitedCityPosition(map, x, y)
+        hidden = hidden or (pfQuest_config["showcluster"] == "0" and routeNode.cluster)
+        hidden = hidden or (pfQuest_config["showspawn"] == "0" and not routeNode.texture)
+        if routeEligible and not hidden then
+          pfQuest.route:AddPoint({ x, y, routeNode })
+        end
       end
     end
     if pfQuest.tracker and pfQuest.tracker.DoLayout then
