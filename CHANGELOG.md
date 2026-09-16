@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.33 — 2026-09-15
+
+- Restored distance-based fading for tracked herb, mining, and other custom minimap icons while preserving the optimized minimap refresh path.
+
 ## 8.0.32 — 2026-09-15
 
 - Added reversible World Map Level Range filtering with a Red threshold, Higher and Lower modes, a direction indicator, and right-click help.

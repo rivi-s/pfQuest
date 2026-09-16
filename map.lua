@@ -1010,6 +1010,18 @@ function pfMap:BuildNode(name, parent)
 end
 
 pfMap.highlightdb = {}
+
+local function UpdateMinimapIconFade(frame, distance)
+  if not frame.pic:IsShown() then return end
+
+  local halfsize = pfMap.drawlayer:GetWidth() / 2
+  local fade_range = frame.fade_range or 8
+  local fade_in = halfsize / 100 * (fade_range - 4)
+  local fade_out = halfsize / 100 * (fade_range + 4)
+  local alpha = ((distance or fade_out) - fade_in) / (fade_out - fade_in)
+  frame.pic:SetAlpha(math.max(0, math.min(alpha, 1)))
+end
+
 function pfMap:UpdateNode(frame, node, color, obj, distance)
   -- clear node to title association table
   if pfMap.highlightdb[frame] then
@@ -1093,14 +1105,7 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
       frame.pic:Show()
 
       if obj == "minimap" then
-        local halfsize = pfMap.drawlayer:GetWidth() / 2
-        local fade_range = frame.fade_range or 8
-        local fade_in = halfsize / 100 * (fade_range - 4)
-        local fade_out = halfsize / 100 * (fade_range + 4)
-        local alpha = ((distance or fade_out) - fade_in) / (fade_out - fade_in)
-        alpha = math.max(alpha, 0)
-        alpha = math.min(alpha, 1)
-        frame.pic:SetAlpha(alpha)
+        UpdateMinimapIconFade(frame, distance)
       end
     else
       frame.pic:Hide()
@@ -1802,6 +1807,11 @@ function pfMap:UpdateMinimap()
             pfMap:UpdateNode(pin, node, color, "minimap", distance)
             pfMap.dirtyMinimapNodes[node] = nil
           end
+
+          -- Custom tracking icons fade with player distance even when the
+          -- underlying node data is unchanged and its expensive rebuild is
+          -- skipped.
+          UpdateMinimapIconFade(pin, distance)
 
           if pin.hl:IsShown() then
             pin.hl:Hide()
