@@ -1536,10 +1536,12 @@ function pfDatabase:SearchQuestID(id, meta, maps)
       local ender_texture
       if meta["qlogid"] then
         -- A quest-log slot can briefly have no objective rows while the game
-        -- reindexes it after a turn-in. Only the client completion flag can
-        -- promote an ender marker to the completed (yellow) state.
+        -- reindexes it after a turn-in, so do not infer completion from the
+        -- live objective count alone. Static quests with no objective table
+        -- are genuine talk/report quests and are ready as soon as accepted.
         local _, _, _, _, _, complete = compat.GetQuestLogTitle(meta["qlogid"])
-        ender_texture = (complete == true or complete == 1) and pfQuestConfig.path .. "\\img\\complete_c"
+        local ready = complete == true or complete == 1 or not quests[id]["obj"]
+        ender_texture = ready and pfQuestConfig.path .. "\\img\\complete_c"
           or pfQuestConfig.path .. "\\img\\complete"
       else
         ender_texture = pfQuestConfig.path .. "\\img\\complete_c"

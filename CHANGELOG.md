@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.34 — 2026-09-17
+
+- Restored yellow turn-in markers for report-only quests whose client completion flag remains unset.
+
 ## 8.0.33 — 2026-09-15
 
 - Restored distance-based fading for tracked herb, mining, and other custom minimap icons while preserving the optimized minimap refresh path.
