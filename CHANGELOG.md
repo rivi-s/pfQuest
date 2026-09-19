@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.35 — 2026-09-19
+
+- Fixed a route error that could occur when a route point lacked map coordinates, and cleared the locked auto-target after a zone or map change so it can no longer get stuck on a stale pick.
+
 ## 8.0.34 — 2026-09-17
 
 - Restored yellow turn-in markers for report-only quests whose client completion flag remains unset.
