@@ -163,6 +163,13 @@ pfQuest.route = CreateFrame("Frame", "pfQuestRoute", WorldFrame)
 pfQuest.route.firstnode = nil
 pfQuest.route.coords = {}
 
+-- Declared here (ahead of its later re-declaration below, which now just
+-- reuses this upvalue) so Reset() can drop a stale automatic-target lock.
+-- Without this, a target picked before a map/zone change could keep winning
+-- the "stay put" tie-break in OnUpdate even after it stopped being the
+-- nearest candidate, since Reset() only ever cleared self.coords/firstnode.
+local automaticTargetKey = nil
+
 pfQuest.route.Reset = function(self)
   self.coords = {}
   self.firstnode = nil
@@ -170,6 +177,7 @@ pfQuest.route.Reset = function(self)
   self.lastDrawX = nil
   self.lastDrawY = nil
   self.lastDrawNode = nil
+  automaticTargetKey = nil
 end
 
 pfQuest.route.Clear = function(self)
@@ -245,7 +253,6 @@ pfQuest.route.IsTarget = function(node)
 end
 
 local lastpos, completed = 0, 0
-local automaticTargetKey = nil
 local function TargetKey(data)
   if not data then return nil end
   local node = data[3]
@@ -255,14 +262,20 @@ local function sortfunc(a, b)
   -- Distances are rounded to two decimals, so ties are common.  UpdateNodes
   -- rebuilds its list through pairs(), whose order is undefined; without a
   -- deterministic tie-breaker the first route target can flip every refresh.
-  if a[4] ~= b[4] then
-    return a[4] < b[4]
+  -- Some legacy map pins have no coordinate pair, so UpdateDistances leaves
+  -- their distance nil. Keep those incomplete points after usable targets.
+  local adistance = tonumber(a[4]) or math.huge
+  local bdistance = tonumber(b[4]) or math.huge
+  if adistance ~= bdistance then
+    return adistance < bdistance
   end
-  if a[1] ~= b[1] then
-    return a[1] < b[1]
+  local ax, bx = tonumber(a[1]) or math.huge, tonumber(b[1]) or math.huge
+  if ax ~= bx then
+    return ax < bx
   end
-  if a[2] ~= b[2] then
-    return a[2] < b[2]
+  local ay, by = tonumber(a[2]) or math.huge, tonumber(b[2]) or math.huge
+  if ay ~= by then
+    return ay < by
   end
 
   local an = a[3] and (a[3].title or a[3].spawn or "") or ""
@@ -312,7 +325,7 @@ pfQuest.route:SetScript("OnUpdate", function()
       end
       if previousIndex and previousIndex > 1 then
         local previous = this.coords[previousIndex]
-        if previous[4] <= this.coords[1][4] + 0.5 then
+        if previous[4] and this.coords[1][4] and previous[4] <= this.coords[1][4] + 0.5 then
           table.remove(this.coords, previousIndex)
           table.insert(this.coords, 1, previous)
         end
