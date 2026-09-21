@@ -369,6 +369,23 @@ pfQuest:SetScript("OnUpdate", function()
       end
 
       pfQuest.abandon = ""
+    elseif entry[4] == "REINDEX" then
+      -- Accepting one quest can shift the Quest Log index of every quest
+      -- below it. The quest data itself has not changed, so patch the
+      -- cached qlogid on existing map nodes instead of a full delete/rebuild.
+      pfQuest:Debug("Reindex Quest: " .. entry[1] .. " (" .. entry[2] .. ")")
+      if pfMap and pfMap.nodes and pfMap.nodes.PFQUEST then
+        for _, coordinates in pairs(pfMap.nodes.PFQUEST) do
+          for _, titles in pairs(coordinates) do
+            for _, node in pairs(titles) do
+              if node and tonumber(node.questid) == tonumber(entry[2]) then
+                node.qlogid = entry[3]
+              end
+            end
+          end
+        end
+      end
+      pfMap.queue_update = GetTime()
     else
       if entry[4] == "NEW" then
         pfQuest:Debug("|cff55ff55New Quest: " .. entry[1] .. " (" .. entry[2] .. ")")
@@ -482,7 +499,10 @@ function pfQuest:UpdateQuestlog()
         }
         change = true
       elseif pfQuest.questlog[questid].qlogid ~= qlogid then
-        queueAdd({ title, questid, qlogid, "RELOAD" })
+        -- Accepting one quest can shift the Quest Log index of every quest
+        -- below it. The quest data itself has not changed, so keep its map
+        -- nodes and update only the index used for live objective reads.
+        queueAdd({ title, questid, qlogid, "REINDEX" })
         pfQuest.questlog_tmp[questid] = pfQuest.questlog[questid]
         pfQuest.questlog_tmp[questid].qlogid = qlogid
         pfQuest.questlog_tmp[questid].state = state

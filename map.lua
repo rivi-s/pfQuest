@@ -335,6 +335,18 @@ function pfMap:HexDifficultyColor(level, force)
   end
 end
 
+local function ObjectiveNameMatches(spawn, objective)
+  spawn = string.lower(tostring(spawn or ""))
+  objective = string.lower(tostring(objective or ""))
+  if spawn == "" or objective == "" then return false end
+  if spawn == objective then return true end
+
+  -- Some quest-log rows pluralize a creature name even though the unit
+  -- database and tooltip use its singular form (Harvest Watcher/Watchers).
+  return objective == spawn .. "s" or spawn == objective .. "s"
+    or objective == spawn .. "es" or spawn == objective .. "es"
+end
+
 function pfMap:ShowTooltip(meta, tooltip)
   local catch = nil
   local catch_obj = nil
@@ -363,10 +375,20 @@ function pfMap:ShowTooltip(meta, tooltip)
               -- kill
               local i, j, monsterName, objNum, objNeeded =
                 strfind(text, pfUI.api.SanitizePattern(QUEST_MONSTERS_KILLED))
-              if monsterName and meta["spawn"] == monsterName then
+              if monsterName and ObjectiveNameMatches(meta["spawn"], monsterName) then
                 catch_obj = true
                 local r, g, b = pfMap.tooltip:GetColor(objNum, objNeeded)
                 tooltip:AddLine("|cffaaaaaa- |r" .. monsterName .. ": " .. objNum .. "/" .. objNeeded, r, g, b)
+              end
+            elseif meta["QTYPE"] == "OBJECT_OBJECTIVE" and (type == "object" or type == "item") then
+              -- Direct object objectives use the same localized progress
+              -- format as item objectives, but have no drop-rate item entry.
+              local _, _, objectName, objNum, objNeeded =
+                strfind(text, pfUI.api.SanitizePattern(QUEST_OBJECTS_FOUND))
+              if objectName and meta["spawn"] == objectName then
+                catch_obj = true
+                local r, g, b = pfMap.tooltip:GetColor(objNum, objNeeded)
+                tooltip:AddLine("|cffaaaaaa- |r" .. objectName .. ": " .. objNum .. "/" .. objNeeded, r, g, b)
               end
             elseif table.getn(meta["item"]) > 0 and type == "item" and meta["droprate"] then
               -- loot
@@ -539,9 +561,10 @@ end
 
 function pfMap:ShowMapID(map)
   if map then
+    local wasShown = WorldMapFrame:IsShown()
     if ToggleWorldMap then
       -- vanilla & tbc
-      if not WorldMapFrame:IsShown() then
+      if not wasShown then
         ToggleWorldMap()
       end
     else
@@ -549,8 +572,21 @@ function pfMap:ShowMapID(map)
       WorldMapFrame:Show()
     end
 
-    pfMap:SetMapByID(map)
-    pfMap:UpdateNodes()
+    if wasShown then
+      pfMap:SetMapByID(map)
+      pfMap:UpdateNodes()
+    else
+      -- Blizzard's own World Map frame has not finished laying itself out on
+      -- the same frame it is first shown. Zooming immediately afterward can
+      -- read a nil GetCenter() from its positioning guide and error inside
+      -- Blizzard's FrameXML. Give it one frame to settle before zooming.
+      local deferFrame = CreateFrame("Frame")
+      deferFrame:SetScript("OnUpdate", function()
+        this:SetScript("OnUpdate", nil)
+        pfMap:SetMapByID(map)
+        pfMap:UpdateNodes()
+      end)
+    end
     return true
   end
 
@@ -1944,6 +1980,14 @@ pfMap:SetScript("OnEvent", function()
       -- the normal settle period. Even enhanced clients emit a burst while
       -- the map view changes. Ordinary
       -- filter and quest-data updates retain the full debounce below.
+      -- A route created while the map was hidden has valid coordinates but
+      -- its last-draw cache refers to the hidden canvas. Invalidate only the
+      -- drawing cache so the existing target is painted on the visible map.
+      if pfQuest.route then
+        pfQuest.route.lastDrawX = nil
+        pfQuest.route.lastDrawY = nil
+        pfQuest.route.lastDrawNode = nil
+      end
       pfMap.queue_update = GetTime()
     elseif newzone ~= pfMap.lastUpdateZone then
       -- deliberate zone change: update immediately, no debounce
