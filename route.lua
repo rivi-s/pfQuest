@@ -196,6 +196,26 @@ pfQuest.route.AddPoint = function(self, tbl)
   self.recalculate = true
 end
 
+-- A party-quest pin never gets a "cluster" pin (that only happens inside
+-- pfDatabase:SearchQuestID, tied to the player's own qlogid), so it stays a
+-- raw, un-clustered spawn candidate here instead of going through AddPoint.
+-- Ported from pfQuest-HDB's route.lua, where the same mechanism handles its
+-- closed-map item objectives.
+pfQuest.route.SetRawObjectiveCandidates = function(self, candidates)
+  if candidates and next(candidates) then
+    self.rawObjectiveCandidates = candidates
+    return
+  end
+
+  if not self.rawObjectiveCandidates then return end
+  self.rawObjectiveCandidates = nil
+  for index = table.getn(self.coords), 1, -1 do
+    if self.coords[index][5] then table.remove(self.coords, index) end
+  end
+  self.firstnode = nil
+  self.recalculate = true
+end
+
 -- Update point distances on demand. The route's OnUpdate normally calls this
 -- while the player moves, but consumers such as the tracker can request an
 -- immediate, consistent snapshot when changing sort modes.
@@ -306,6 +326,31 @@ pfQuest.route:SetScript("OnUpdate", function()
 
   -- update distances to player
   this:UpdateDistances()
+
+  -- Keep a single raw party-objective route point, but choose it on every
+  -- movement tick, mirroring pfQuest-HDB's route.lua.
+  if not targetTitle and this.rawObjectiveCandidates then
+    local nearest, nearestDistance
+    for _, candidate in ipairs(this.rawObjectiveCandidates) do
+      local dx, dy = (xplayer * 100 - candidate[1]) * 1.5, yplayer * 100 - candidate[2]
+      candidate[4] = ceil(math.sqrt(dx * dx + dy * dy) * 100) / 100
+      if not nearestDistance or candidate[4] < nearestDistance then
+        nearest, nearestDistance = candidate, candidate[4]
+      end
+    end
+    if nearest and TargetKey(nearest) ~= automaticTargetKey then
+      for index = table.getn(this.coords), 1, -1 do
+        if this.coords[index][5] then table.remove(this.coords, index) end
+      end
+      table.insert(this.coords, nearest)
+      this.firstnode = nil
+      this.recalculate = true
+      -- Update the lock immediately: the "stay near current pick" stability
+      -- check below still reads the pre-swap key on this same tick otherwise.
+      automaticTargetKey = TargetKey(nearest)
+    end
+  end
+
   -- Reorder only when the available route nodes or an explicit target change.
   -- Re-sorting every second while the player moves causes route flicker and
   -- expensive map redraws without improving the selected objective.
