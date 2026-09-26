@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.38 — 2026-09-26
+
+- Added rendering and routing support for pfQuest-turtle's new party quest map pins (recolorable marker, route-arrow support, including while the World Map is closed).
+
 ## 8.0.37 — 2026-09-24
 
 - Added an optional Turtle boundary-alias hook so Current Zone Only can suppress quest entities duplicated between custom zones and older base maps.
