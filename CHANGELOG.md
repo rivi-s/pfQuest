@@ -1,5 +1,12 @@
 # pfQuest base patch notes
 
+## 8.0.39 — 2026-09-26
+
+- Reorganized the configuration window into five clearer tabs while preserving every existing option.
+- Made new characters open the configuration window at the largest usable size while retaining saved sizing for existing characters.
+- Fixed live updates for map-node transparency, the route-arrow toggle, and the minimap-button toggle and reload prompt.
+- Added generic extension hooks that let database addons register their own tracking categories without exposing addon-specific options to vanilla users.
+
 ## 8.0.38 — 2026-09-26
 
 - Added rendering and routing support for pfQuest-turtle's new party quest map pins (recolorable marker, route-arrow support, including while the World Map is closed).

@@ -142,7 +142,7 @@ do -- tracking menu
         frame[name].icon:SetWidth(14)
         frame[name].icon:SetHeight(14)
         frame[name].icon:SetPoint("RIGHT", -8, 0)
-        frame[name].icon:SetTexture(pfQuestConfig.path .. "\\img\\tracking\\" .. name)
+        frame[name].icon:SetTexture(tracking[5] or (pfQuestConfig.path .. "\\img\\tracking\\" .. name))
 
         -- hover
         frame[name].highlight = frame[name]:CreateTexture(nil, "OVERLAY")
@@ -246,6 +246,19 @@ do -- tracking menu
   }
 
   pfQuestMenu = CreateMenu(menu, "pfQuestMenu")
+  function pfQuest:RegisterTrackingMenuEntry(tracking, before)
+    local position = table.getn(menu) + 1
+    for index, entry in pairs(menu) do
+      if entry[1] == before then position = index break end
+    end
+    table.insert(menu, position, tracking)
+    local shown = pfQuestMenu:IsShown()
+    local onShow = pfQuestMenu:GetScript("OnShow")
+    pfQuestMenu:Hide()
+    pfQuestMenu = CreateMenu(menu, "pfQuestMenuExtended")
+    pfQuestMenu:SetScript("OnShow", onShow)
+    if shown then pfQuestMenu:Show() end
+  end
   pfQuestMenu:SetScript("OnShow", function()
     -- create shortcuts
     local anchor = this.anchor or pfQuestIcon

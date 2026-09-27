@@ -184,15 +184,10 @@ SlashCmdList["PFDB"] = function(input, editbox)
       faction = commandlist[3],
     }
 
-    -- read skill for auto mines
-    if list == "mines" and commandlist[3] == "auto" then
-      state.max = pfDatabase:GetPlayerSkill(186) or 0
-      state.min = state.max - 100
-    end
-
-    -- read skill for auto herbs
-    if list == "herbs" and commandlist[3] == "auto" then
-      state.max = pfDatabase:GetPlayerSkill(182) or 0
+    -- read a registered profession skill for automatic level filtering
+    local autoSkills = pfDatabase.metaAutoSkills or { mines = 186, herbs = 182 }
+    if autoSkills[list] and commandlist[3] == "auto" then
+      state.max = pfDatabase:GetPlayerSkill(autoSkills[list]) or 0
       state.min = state.max - 100
     end
 

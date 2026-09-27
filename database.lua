@@ -1105,6 +1105,8 @@ local skill = {
   ["rares"] = true,
   ["chests"] = true,
 }
+pfDatabase.metaSkillRelations = skill
+pfDatabase.metaAutoSkills = pfDatabase.metaAutoSkills or { mines = 186, herbs = 182 }
 
 function pfDatabase:SearchMetaRelation(query, meta, show)
   local maps = {}
