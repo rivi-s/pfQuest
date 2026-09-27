@@ -1135,11 +1135,16 @@ function pfDatabase:SearchMetaRelation(query, meta, show)
         -- faction is different from the queried one
       else
         local prev_icon = meta.icon
+        local prev_level = meta.level
         local object = pfDB["objects"]["loc"][math.abs(entry)]
         local unit = pfDB["units"]["loc"][entry]
 
         -- set node as tracking result
         meta.tracking = true
+        local skillCaption = pfDatabase.metaSkillCaptions and pfDatabase.metaSkillCaptions[track]
+        if skillCaption then
+          meta.level = string.format("%s [%s]", value, skillCaption)
+        end
 
         -- handle custom tracking icons
         if pfQuest_config.trackingicons == "0" then
@@ -1167,6 +1172,7 @@ function pfDatabase:SearchMetaRelation(query, meta, show)
 
         -- reset meta table
         meta.icon = prev_icon
+        meta.level = prev_level
         meta.tracking = false
       end
     end
@@ -1185,7 +1191,8 @@ function pfDatabase:TrackMeta(list, state)
 
   local meta = {
     ["addon"] = identifier,
-    ["icon"] = pfQuestConfig.path .. "\\img\\tracking\\" .. list,
+    ["icon"] = (pfDatabase.metaTrackingIcons and pfDatabase.metaTrackingIcons[list])
+      or (pfQuestConfig.path .. "\\img\\tracking\\" .. list),
   }
 
   local query = {
@@ -1323,7 +1330,7 @@ function pfDatabase:SearchObjectID(id, meta, maps, prio)
   meta["spawn"] = pfDB.objects.loc[id]
   meta["spawnid"] = id
   meta["title"] = meta["quest"] or meta["item"] or meta["spawn"]
-  meta["level"] = skill and string.format("%s [%s]", skill, caption) or nil
+  meta["level"] = skill and string.format("%s [%s]", skill, caption) or meta["level"]
   meta["spawntype"] = pfQuest_Loc["Object"]
   -- description only depends on invariant fields; compute once
   meta["description"] = pfDatabase:BuildQuestDescription(meta)
@@ -1335,7 +1342,7 @@ function pfDatabase:SearchObjectID(id, meta, maps, prio)
       meta["zone"] = zone
       meta["x"] = x
       meta["y"] = y
-      meta["respawn"] = respawn and SecondsToTime(respawn)
+      meta["respawn"] = respawn and respawn > 0 and SecondsToTime(respawn) or pfQuest_Loc["N/A"]
 
       maps[zone] = maps[zone] and maps[zone] + prio or prio
       pfMap:AddNode(meta)
