@@ -182,6 +182,10 @@ end
 
 pfQuest.route.Clear = function(self)
   self:Reset()
+  -- Raw objective candidates are kept outside coords so movement can select
+  -- the nearest spawn cheaply. A full clear must discard that cache as well,
+  -- otherwise OnUpdate immediately restores the route and re-shows the arrow.
+  self.rawObjectiveCandidates = nil
   ClearPath(objectivepath)
   ClearPath(playerpath)
   ClearPath(mplayerpath)

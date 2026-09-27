@@ -931,9 +931,11 @@ end
 
 function pfMap:NodeClick()
   if IsShiftKeyDown() then
-    if this.questid and this.texture and this.layer < 5 then
-      -- mark questnode as done
-      pfQuest_history[this.questid] = { time(), UnitLevel("player") }
+    local questid = tonumber(this.questid)
+    if questid and this.texture and this.layer < 5 then
+      -- Keep the SavedVariables key numeric. HDB rows may expose IDs as text,
+      -- and string history keys are intentionally discarded during migration.
+      pfQuest_history[questid] = { time(), UnitLevel("player") }
     end
 
     if this.node and this.title and this.node[this.title] then

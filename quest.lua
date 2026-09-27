@@ -809,6 +809,13 @@ function pfQuest:AddQuestLogIntegration()
   pfQuest.buttonClean:SetPoint("TOP", dockTitle, "TOP", 37, 0)
   pfQuest.buttonClean:SetScript("OnClick", function()
     pfMap:DeleteNode("PFQUEST")
+    -- A manually selected map pin owns the route arrow until its explicit
+    -- target is cleared. Cleaning the pins must also release that target and
+    -- discard the cached route to the now-hidden quest marker.
+    if pfQuest.route then
+      pfQuest.route.SetTarget(nil)
+      pfQuest.route:Clear()
+    end
   end)
 
   pfQuest.buttonReset = pfQuest.buttonReset or CreateFrame("Button", "pfQuestReset", dockFrame, "UIPanelButtonTemplate")

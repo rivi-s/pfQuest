@@ -720,6 +720,15 @@ pfBrowser.clean:SetPoint("BOTTOMRIGHT", pfBrowser, "TOPRIGHT", 0, -55)
 pfBrowser.clean:SetScript("OnClick", function()
   pfMap:DeleteNode("PFDB")
   pfMap:UpdateNodes()
+  -- Database-result pins can also become the route arrow's explicit target.
+  -- Update the remaining pins first, then clear the route so that this same
+  -- refresh cannot immediately replace the removed database result with an
+  -- automatic quest route.
+  if pfQuest.route then
+    pfQuest.route.SetTarget(nil)
+    pfQuest.route:Clear()
+  end
+  pfMap.queue_update = nil
 end)
 pfBrowser.clean.text = pfBrowser.clean:CreateFontString("Caption", "LOW", "GameFontWhite")
 pfBrowser.clean.text:SetAllPoints(pfBrowser.clean)

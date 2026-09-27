@@ -1,5 +1,11 @@
 # pfQuest base patch notes
 
+## 8.0.40 — 2026-09-27
+
+- Fixed manually completed map quests returning after reload when a database provider supplied their quest IDs as text.
+- Made the Quest Log Clean button and database browser Clean Map button clear their selected route arrows.
+- Prevented cleared arrows from being immediately restored from cached objective candidates.
+
 ## 8.0.39 — 2026-09-26
 
 - Reorganized the configuration window into five clearer tabs while preserving every existing option.
