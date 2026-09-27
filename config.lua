@@ -802,10 +802,6 @@ function pfQuestConfig:RebuildConfigUI()
   return self:CreateConfigEntries(pfQuest_defconfig)
 end
 
-pfQuest.RebuildConfigUI = function()
-  return pfQuestConfig:RebuildConfigUI()
-end
-
 -- Register ADDON_LOADED event handler after all methods are defined
 -- This ensures LoadConfig, MigrateHistory, CreateConfigEntries exist when called
 pfQuestConfig:RegisterEvent("ADDON_LOADED")

@@ -14,6 +14,9 @@ local GetTime = GetTime
 local UnitLevel = UnitLevel
 
 pfQuest = CreateFrame("Frame")
+pfQuest.RebuildConfigUI = function()
+  return pfQuestConfig:RebuildConfigUI()
+end
 pfQuest.icons = {}
 pfQuest_global = pfQuest_global or {}
 
