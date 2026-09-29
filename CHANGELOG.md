@@ -1,5 +1,11 @@
 # pfQuest base patch notes
 
+## 8.0.41 — 2026-09-29
+
+- Restored active quest map nodes when an accidentally hidden quest is removed from the Journal, and fixed the Journal remove button flickering before clicks register.
+- Prevented duplicate non-HDB tracker rows when live and database quest titles use visually identical punctuation with different encodings.
+- Refreshed non-HDB minimap and world-map ender icons immediately when an active quest becomes complete.
+
 ## 8.0.40 — 2026-09-27
 
 - Fixed manually completed map quests returning after reload when a database provider supplied their quest IDs as text.

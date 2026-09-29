@@ -725,6 +725,39 @@ function pfMap:AddNode(meta)
 
   -- skip early on existing nodes
   if pfMap.nodes[addon][map][coords][title] then
+    local existing = pfMap.nodes[addon][map][coords][title]
+
+    -- Quest progress can change an ender from the incomplete grey question
+    -- mark to the completed yellow question mark without changing its title,
+    -- coordinate, or priority layer. Treat that as a real node update before
+    -- the same-layer early return below, otherwise the minimap keeps the
+    -- stale texture until a reload or unrelated map rebuild.
+    if existing.questid and meta.questid and existing.questid == meta.questid
+        and existing.texture ~= meta.texture then
+      existing.texture = meta.texture
+      existing.QTYPE = meta.QTYPE
+      existing.qlogid = meta.qlogid
+      existing.description = meta.description
+      existing.layer = layer
+      -- Combined node metadata can be shared by several coordinates. Mark
+      -- every container referencing this same node so all of its world-map
+      -- and minimap frames repaint, not only the coordinate encountered first.
+      for indexedMap, indexedCoords in pairs(
+          pfMap.titleIndex[addon] and pfMap.titleIndex[addon][title] or {}) do
+        for indexedCoord in pairs(indexedCoords) do
+          local container = pfMap.nodes[addon][indexedMap]
+            and pfMap.nodes[addon][indexedMap][indexedCoord]
+          if container and container[title] == existing then
+            pfMap.dirtyNodes[container] = true
+            pfMap.dirtyMinimapNodes[container] = true
+            pfMap.dirtyMaps[indexedMap] = true
+          end
+        end
+      end
+      pfMap.queue_update = GetTime()
+      return
+    end
+
     if item and table.getn(pfMap.nodes[addon][map][coords][title].item) > 0 then
       -- check if item already exists
       for id, name in pairs(pfMap.nodes[addon][map][coords][title].item) do

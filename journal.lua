@@ -41,6 +41,10 @@ local function OnEnter()
 end
 
 local function OnLeave()
+  -- The remove button is a child of the row. Vanilla fires the row's
+  -- OnLeave while the cursor crosses onto that child, so hiding it here makes
+  -- the X flicker away before its click can register.
+  if this.remove and MouseIsOver(this.remove) then return end
   this.remove:Hide()
   this.bg:Hide()
   GameTooltip:Hide()
@@ -64,9 +68,39 @@ end
 
 local function RemoveOnClick()
   if this.entry.id then
-    pfQuest_history[this.entry.id] = nil
+    local questid = tonumber(this.entry.id) or this.entry.id
+    pfQuest_history[questid] = nil
+
+    local active = pfQuest.questlog and pfQuest.questlog[questid]
+    if active and active.qlogid and pfQuest_config["trackingmethod"] ~= 4 then
+      -- Shift-clicking an active map quest records it in the Journal and
+      -- removes its PFQUEST nodes. Removing that Journal entry must rebuild
+      -- the active objectives, not merely refresh available quest givers.
+      local meta = { addon = "PFQUEST", qlogid = active.qlogid }
+      if type(pfDatabase.SearchQuestIDHDB) ~= "function"
+        or not pfDatabase:SearchQuestIDHDB(questid, meta) then
+        pfDatabase:SearchQuestID(questid, meta)
+      end
+      pfMap.queue_update = GetTime()
+    else
+      -- A quest no longer in the log may become available again, while its
+      -- follow-ups may cease to qualify when completion history is removed.
+      pfQuest.updateQuestGivers = true
+    end
     this.view:ReloadJournal()
   end
+end
+
+local function RemoveOnEnter()
+  this:Show()
+  this.entry.bg:Show()
+end
+
+local function RemoveOnLeave()
+  if MouseIsOver(this.entry) then return end
+  this:Hide()
+  this.entry.bg:Hide()
+  GameTooltip:Hide()
 end
 
 local function CreateEntry(self, index)
@@ -100,6 +134,8 @@ local function CreateEntry(self, index)
   self[index].remove:SetWidth(20)
   self[index].remove:Hide()
   self[index].remove:SetScript("OnClick", RemoveOnClick)
+  self[index].remove:SetScript("OnEnter", RemoveOnEnter)
+  self[index].remove:SetScript("OnLeave", RemoveOnLeave)
   self[index].remove.entry = self[index]
   self[index].remove.view = self
   self[index].remove.texture = self[index].remove:CreateTexture("pfQuestionDialogCloseTex")
