@@ -926,6 +926,10 @@ function pfMap:DeleteNode(addon, title)
   elseif pfMap.titleIndex[addon] and pfMap.titleIndex[addon][title] then
     -- fast path: use reverse index to find exactly which (map, coords) to clear
     for map, coords_set in pairs(pfMap.titleIndex[addon][title]) do
+      -- Removing the last title at a coordinate still changes the route input.
+      -- Always invalidate every affected map so automatic routing drops stale
+      -- coordinates and selects the next active quest immediately.
+      pfMap.dirtyMaps[map] = true
       if pfMap.nodes[addon] and pfMap.nodes[addon][map] then
         for coords in pairs(coords_set) do
           if pfMap.nodes[addon][map][coords] then
@@ -936,7 +940,6 @@ function pfMap:DeleteNode(addon, title)
               -- coord survives with remaining titles; reprocess on next UpdateNodes
               pfMap.dirtyNodes[pfMap.nodes[addon][map][coords]] = true
               pfMap.dirtyMinimapNodes[pfMap.nodes[addon][map][coords]] = true
-              pfMap.dirtyMaps[map] = true
             end
           end
         end

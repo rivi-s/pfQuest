@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.42 — 2026-09-30
+
+- Recalculated automatic routes immediately after a turned-in quest removes its final map node.
+- Added required-all prerequisite support for convergence quests such as Zanzil's Mixture and a Fool's Stout.
+
 ## 8.0.41 — 2026-09-29
 
 - Restored active quest map nodes when an accidentally hidden quest is removed from the Journal, and fixed the Journal remove button flickering before clicks register.

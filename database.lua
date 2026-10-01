@@ -1797,7 +1797,14 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
   end
 
   -- hide missing pre-quests
-  if quests[id]["pre"] then
+  local requiredPre = quests[id]["preall"]
+    or (pfDB["quests"]["preall"] and pfDB["quests"]["preall"][id])
+  if requiredPre then
+    -- Convergence quests require every listed branch to be complete.
+    for _, prequest in pairs(requiredPre) do
+      if not pfQuest_history[prequest] then return end
+    end
+  elseif quests[id]["pre"] then
     -- check all pre-quests for one to be completed
     local one_complete = nil
     for _, prequest in pairs(quests[id]["pre"]) do
