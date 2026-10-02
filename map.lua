@@ -2178,7 +2178,14 @@ nodeUpdateDriver:SetScript("OnUpdate", function()
       or pfQuest.updateQuestGivers or pfQuest.updateQuestLog)
     if not questBusy then
       pfMap.queue_update = nil
+      -- Node changes must bypass the movement/zoom cache. UpdateNodes handles
+      -- tracker and route state while the world map is closed, but the normal
+      -- minimap poll can otherwise reuse its previous player position for up
+      -- to a second and leave a removed or restored quest icon visibly stale.
+      pfMap.xPlayer = nil
+      pfMap.minimapTick = nil
       pfMap:UpdateNodes()
+      pfMap:UpdateMinimap()
     end
   end
 end)
