@@ -1,5 +1,9 @@
 # pfQuest base patch notes
 
+## 8.0.43 — 2026-10-01
+
+- Refreshed quest objectives, map markers, and navigation routes immediately when objective progress changes without requiring the World Map to open.
+
 ## 8.0.42 — 2026-09-30
 
 - Recalculated automatic routes immediately after a turned-in quest removes its final map node.
