@@ -349,7 +349,8 @@ pfQuest:SetScript("OnUpdate", function()
       pfQuest:Debug("|cffff5555Remove Quest: " .. entry[1] .. " (" .. entry[2] .. ")")
 
       -- write pfQuest.questlog history
-      if entry[1] == pfQuest.abandon then
+      local abandoned = entry[1] == pfQuest.abandon
+      if abandoned then
         pfQuest_history[entry[2]] = nil
       else
         pfQuest_history[entry[2]] = { time(), UnitLevel("player") }
@@ -371,7 +372,10 @@ pfQuest:SetScript("OnUpdate", function()
         pfQuest:Debug(format("|cffffff00TIMER DeleteNode(REMOVE): %.4fs", GetTime() - t0))
       end
 
-      pfQuest.abandon = ""
+      -- Multiple quests can leave the log in one unordered queue batch. An
+      -- unrelated removal must not consume the identity of the quest the
+      -- player explicitly abandoned.
+      if abandoned then pfQuest.abandon = "" end
     elseif entry[4] == "REINDEX" then
       -- Accepting one quest can shift the Quest Log index of every quest
       -- below it. The quest data itself has not changed, so patch the
