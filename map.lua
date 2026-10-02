@@ -2164,6 +2164,26 @@ pfMap:SetScript("OnEvent", function()
 end)
 
 local hlstate, shiftstate, transition, hidecluster, fps, resetmap
+
+-- Keep queued node rebuilds independent of the map canvas. Some clients stop
+-- updating WorldFrame children while particular UI panels are closed, which
+-- leaves minimap pins and routes stale until a later world-map refresh.
+local nodeUpdateDriver = CreateFrame("Frame", nil, UIParent)
+nodeUpdateDriver:SetScript("OnUpdate", function()
+  if (this.throttle or 0) > GetTime() then return end
+  this.throttle = GetTime() + 0.05
+
+  if pfMap.queue_update and pfMap.queue_update + 0.25 < GetTime() then
+    local questBusy = pfQuest and ((pfQuest.queueCount or 0) > 0
+      or pfQuest.updateQuestGivers or pfQuest.updateQuestLog)
+    if not questBusy then
+      pfMap.queue_update = nil
+      pfMap:UpdateNodes()
+    end
+  end
+end)
+nodeUpdateDriver:Show()
+
 pfMap:SetScript("OnUpdate", function()
   -- handle highlights and animations
   if pfMap.queue_update or transition or pfMap.highlight ~= hlstate or shiftstate ~= hidecluster then
@@ -2197,20 +2217,6 @@ pfMap:SetScript("OnUpdate", function()
     return
   else
     this.throttle = GetTime() + 0.05
-  end
-
-  -- process node updates if required
-  if pfMap.queue_update and pfMap.queue_update + 0.25 < GetTime() then
-    -- don't fire while the quest system still has work pending: each queue entry
-    -- and SearchQuests/UpdateQuestlog call will push queue_update to a newer time,
-    -- so the debounce will settle naturally once the whole batch is done.
-    -- This prevents UpdateNodes from firing between queue entries when a prior
-    -- queue_update stamp happens to be 0.25s old mid-drain.
-    local questBusy = pfQuest and ((pfQuest.queueCount or 0) > 0 or pfQuest.updateQuestGivers or pfQuest.updateQuestLog)
-    if not questBusy then
-      pfMap.queue_update = nil
-      pfMap:UpdateNodes()
-    end
   end
 
   if pfMap.explorationCacheAt and pfMap.explorationCacheAt <= GetTime() then
