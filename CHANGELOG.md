@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.44 — 2026-10-02
+
+- Redrew minimap objectives and route arrows immediately after quest-log changes while the World Map is closed.
+- Made quest abandonment restore the abandoned quest without removing nearby completed quest markers.
+
 ## 8.0.43 — 2026-10-01
 
 - Refreshed quest objectives, map markers, and navigation routes immediately when objective progress changes without requiring the World Map to open.
