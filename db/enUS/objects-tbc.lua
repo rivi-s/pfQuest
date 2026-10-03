@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["enUS-tbc"] = {
   [38] = "Captain Sanders Chest",
   [129] = "Naxx Teleporter trap",

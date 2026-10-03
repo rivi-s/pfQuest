@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["enUS-tbc"] = {
   [17] = "_",
   [192] = "_",

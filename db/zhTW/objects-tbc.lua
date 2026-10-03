@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["zhTW-tbc"] = {
   [4] = "營火傷害",
   [38] = "Captain Sanders Chest",

@@ -267,45 +267,6 @@ pfMap.minimap_zoom = minimap_zoom
 pfMap.minimap_sizes = minimap_sizes
 
 pfMap.tooltip = CreateFrame("Frame", "pfMapTooltip", GameTooltip)
-
--- A creature can start or end several database quests with the same localized
--- title. Once one of those IDs is active, only active IDs with that title
--- belong in the unit tooltip; the other variants are old or future stages.
-local function IsCurrentGameTooltipQuest(meta)
-  local questid = meta and tonumber(meta.questid)
-  if not questid or not meta.quest then return true end
-  local questlog = (pfQuest and pfQuest.questlog) or {}
-  if questlog[questid] or questlog[tostring(questid)] then return true end
-
-  for activeID, state in pairs(questlog) do
-    if tonumber(activeID) and state and state.title == meta.quest then
-      return false
-    end
-  end
-
-  return not (pfQuest_history and pfQuest_history[questid])
-end
-
--- Same-title quest chains can share an NPC, coordinate, and icon. AddNode
--- keeps those colliding IDs as variants under one rendered node; consumers
--- must use the variant that is actually active instead of whichever chain
--- step happened to create the node first.
-function pfMap:GetActiveQuestVariant(meta)
-  if not meta then return meta end
-  local questlog = (pfQuest and pfQuest.questlog) or {}
-  local questid = tonumber(meta.questid)
-  if questid and (questlog[questid] or questlog[tostring(questid)]) then
-    return meta
-  end
-  for variantID, variant in pairs(meta.questVariants or {}) do
-    local id = tonumber(variant.questid) or tonumber(variantID)
-    if id and (questlog[id] or questlog[tostring(id)]) then
-      return variant
-    end
-  end
-  return meta
-end
-
 pfMap.tooltip:SetScript("OnShow", function()
   local focus = GetMouseFocus()
   -- abort on pfQuest nodes
@@ -336,14 +297,7 @@ pfMap.tooltip:SetScript("OnShow", function()
       -- pfQuest-partyprogress.lua, with per-player progress). Showing both
       -- duplicated the "[!] QuestName" block on the same creature's tooltip.
       if obj[zone] and obj[zone].addon ~= "PFPARTY" then
-        if IsCurrentGameTooltipQuest(obj[zone]) then
-          pfMap:ShowTooltip(obj[zone], GameTooltip)
-        end
-        for _, variant in pairs(obj[zone].questVariants or {}) do
-          if IsCurrentGameTooltipQuest(variant) then
-            pfMap:ShowTooltip(variant, GameTooltip)
-          end
-        end
+        pfMap:ShowTooltip(obj[zone], GameTooltip)
         GameTooltip:Show()
       end
     end
@@ -404,36 +358,6 @@ local function ObjectiveNameMatches(spawn, objective)
     or objective == spawn .. "es" or spawn == objective .. "es"
 end
 
--- Some Turtle clients expose a pfUI cmatch helper that does not preserve the
--- positional captures in QUEST_MONSTERS_KILLED. The quest tracker still has
--- the right text, but the unit tooltip then falls back to the bare mob name.
--- Keep cmatch as the locale-aware path and recover from the visible `n/n`
--- progress text only when its returned name cannot identify this spawn.
-local function MatchMonsterObjective(text, spawn)
-  local name, current, needed = pfUI.api.cmatch(text, QUEST_MONSTERS_KILLED)
-  if name and ObjectiveNameMatches(spawn, name) then return name, current, needed end
-
-  -- If cmatch lost or reordered the localized captures, the visible tracker
-  -- text still begins with the objective creature and ends in `current/needed`.
-  -- Anchoring the known spawn at the start avoids partial-name collisions
-  -- such as matching "Wolf" inside "Dire Wolf".
-  local lowerText = string.lower(tostring(text or ""))
-  local lowerSpawn = string.lower(tostring(spawn or ""))
-  if lowerSpawn ~= "" and string.find(lowerText, lowerSpawn, 1, true) == 1 then
-    local _, _, progress, required = strfind(text, "(%d+)%s*/%s*(%d+)")
-    if progress and required then return spawn, progress, required end
-  end
-
-  local _, _, raw1, raw2, raw3 = strfind(text, pfUI.api.SanitizePattern(QUEST_MONSTERS_KILLED))
-  local raw = { raw1, raw2, raw3 }
-  for index = 1, table.getn(raw) do
-    if raw[index] and ObjectiveNameMatches(spawn, raw[index]) then
-      local _, _, progress, required = strfind(text, "(%d+)%s*/%s*(%d+)")
-      if progress and required then return raw[index], progress, required end
-    end
-  end
-end
-
 function pfMap:ShowTooltip(meta, tooltip)
   local catch = nil
   local catch_obj = nil
@@ -441,16 +365,11 @@ function pfMap:ShowTooltip(meta, tooltip)
 
   -- add quest data
   if meta["quest"] then
-    local metaQuestID = tonumber(meta["questid"])
-    local activeQuest = metaQuestID and pfQuest.questlog and pfQuest.questlog[metaQuestID]
     -- scan all quest entries for matches
     for qid = 1, GetNumQuestLogEntries() do
       local qtitle, _, _, _, _, complete = compat.GetQuestLogTitle(qid)
 
-      local questMatches = meta["qlogid"] and meta["qlogid"] == qid
-        or (not meta["qlogid"] and activeQuest and activeQuest.qlogid == qid)
-        or (not meta["qlogid"] and not metaQuestID and meta["quest"] == qtitle)
-      if questMatches then
+      if meta["quest"] == qtitle then
         -- handle active quests
         local objectives = GetNumQuestLeaderBoards(qid)
         catch = true
@@ -461,24 +380,13 @@ function pfMap:ShowTooltip(meta, tooltip)
 
         if objectives then
           for i = 1, objectives, 1 do
-            local text, type, finished = compat.GetQuestLogLeaderBoard(i, qid)
+            local text, type, finished = GetQuestLogLeaderBoard(i, qid)
 
-            if type == "monster" or meta["QTYPE"] == "UNIT_OBJECTIVE"
-                or meta["QTYPE"] == "UNIT_OBJECTIVE_ITEMREQ" then
+            if type == "monster" then
               -- kill
-              local matchedObjective = meta["spawn"]
-              local monsterName, objNum, objNeeded = MatchMonsterObjective(text, matchedObjective)
-              if not monsterName and meta["QTYPE"] == "UNIT_OBJECTIVE_ITEMREQ"
-                  and meta["relatedobjectives"] then
-                for objectiveName in pairs(meta["relatedobjectives"]) do
-                  monsterName, objNum, objNeeded = MatchMonsterObjective(text, objectiveName)
-                  if monsterName then
-                    matchedObjective = objectiveName
-                    break
-                  end
-                end
-              end
-              if monsterName and ObjectiveNameMatches(matchedObjective, monsterName) then
+              local i, j, monsterName, objNum, objNeeded =
+                strfind(text, pfUI.api.SanitizePattern(QUEST_MONSTERS_KILLED))
+              if monsterName and ObjectiveNameMatches(meta["spawn"], monsterName) then
                 catch_obj = true
                 local r, g, b = pfMap.tooltip:GetColor(objNum, objNeeded)
                 tooltip:AddLine("|cffaaaaaa- |r" .. monsterName .. ": " .. objNum .. "/" .. objNeeded, r, g, b)
@@ -486,15 +394,16 @@ function pfMap:ShowTooltip(meta, tooltip)
             elseif meta["QTYPE"] == "OBJECT_OBJECTIVE" and (type == "object" or type == "item") then
               -- Direct object objectives use the same localized progress
               -- format as item objectives, but have no drop-rate item entry.
-              local objectName, objNum, objNeeded = pfUI.api.cmatch(text, QUEST_OBJECTS_FOUND)
+              local _, _, objectName, objNum, objNeeded =
+                strfind(text, pfUI.api.SanitizePattern(QUEST_OBJECTS_FOUND))
               if objectName and meta["spawn"] == objectName then
                 catch_obj = true
                 local r, g, b = pfMap.tooltip:GetColor(objNum, objNeeded)
                 tooltip:AddLine("|cffaaaaaa- |r" .. objectName .. ": " .. objNum .. "/" .. objNeeded, r, g, b)
               end
-            elseif table.getn(meta["item"]) > 0 and (type == "item" or type == "object") and meta["droprate"] then
+            elseif table.getn(meta["item"]) > 0 and type == "item" and meta["droprate"] then
               -- loot
-              local itemName, objNum, objNeeded = pfUI.api.cmatch(text, QUEST_OBJECTS_FOUND)
+              local i, j, itemName, objNum, objNeeded = strfind(text, pfUI.api.SanitizePattern(QUEST_OBJECTS_FOUND))
 
               for mid, item in pairs(meta["item"]) do
                 if item == itemName then
@@ -521,7 +430,7 @@ function pfMap:ShowTooltip(meta, tooltip)
               end
             elseif table.getn(meta["item"]) > 0 and type == "item" and meta["sellcount"] then
               -- vendor
-              local itemName, objNum, objNeeded = pfUI.api.cmatch(text, QUEST_OBJECTS_FOUND)
+              local i, j, itemName, objNum, objNeeded = strfind(text, pfUI.api.SanitizePattern(QUEST_OBJECTS_FOUND))
 
               for mid, item in pairs(meta["item"]) do
                 if item == itemName then
@@ -774,24 +683,13 @@ function pfMap:AddNode(meta)
     return
   end
 
-  local addon = meta["addon"] or "PFDB"
-  if addon == "PFQUEST"
-    and pfDatabase:IsHDBEnabled()
-    and meta.questid
-    and (not meta.spawn or meta.spawn == UNKNOWN)
-  then
-    -- An asynchronous HDB refresh can overlap a legacy fallback that no
-    -- longer has the unloaded entity tables available. Never let that
-    -- incomplete placeholder replace or cover the map-ready HDB node.
-    return
-  end
-
   -- only compute description if the caller hasn't already done it
   -- (SearchMobID / SearchObjectID hoist this call outside their coord loops)
   if meta["description"] == nil then
     meta["description"] = pfDatabase:BuildQuestDescription(meta)
   end
 
+  local addon = meta["addon"] or "PFDB"
   local map = meta["zone"]
   local coords = meta["x"] .. "|" .. meta["y"]
   local title = meta["title"]
@@ -828,6 +726,7 @@ function pfMap:AddNode(meta)
   -- skip early on existing nodes
   if pfMap.nodes[addon][map][coords][title] then
     local existing = pfMap.nodes[addon][map][coords][title]
+
     -- Quest progress can change an ender from the incomplete grey question
     -- mark to the completed yellow question mark without changing its title,
     -- coordinate, or priority layer. Treat that as a real node update before
@@ -859,13 +758,6 @@ function pfMap:AddNode(meta)
       return
     end
 
-    if existing.questid and meta.questid and existing.questid ~= meta.questid then
-      existing.questVariants = existing.questVariants or {}
-      local variant = {}
-      for key, value in pairs(meta) do variant[key] = value end
-      variant.item = { [1] = item }
-      existing.questVariants[meta.questid] = variant
-    end
     if item and table.getn(pfMap.nodes[addon][map][coords][title].item) > 0 then
       -- check if item already exists
       for id, name in pairs(pfMap.nodes[addon][map][coords][title].item) do
@@ -904,36 +796,11 @@ function pfMap:AddNode(meta)
       return
     end
 
-    local existing = pfMap.nodes[addon][map][coords][title]
-    local richerReplacement = existing
-      and (not existing.spawn or existing.spawn == UNKNOWN)
-      and meta.spawn and meta.spawn ~= UNKNOWN
-
-    -- Unified world-map clusters keep their own metadata copy. When an
-    -- asynchronous provider replaces an early placeholder, refresh that copy
-    -- as well or tooltip extensions will continue to see spawn="Unknown".
-    if richerReplacement and unifiedcache[title] and unifiedcache[title][map] then
-      for _, cluster in pairs(unifiedcache[title][map]) do
-        local sameCoordinate = false
-        for _, point in ipairs(cluster.coords or {}) do
-          if tonumber(point[1]) == tonumber(meta.x) and tonumber(point[2]) == tonumber(meta.y) then
-            sameCoordinate = true
-            break
-          end
-        end
-        if sameCoordinate and cluster.meta
-          and (not cluster.meta.spawn or cluster.meta.spawn == UNKNOWN) then
-          for key, value in pairs(meta) do cluster.meta[key] = value end
-        end
-      end
-    end
-
     if
       pfMap.nodes[addon][map][coords][title]
       and pfMap.nodes[addon][map][coords][title].layer
       and layer
       and pfMap.nodes[addon][map][coords][title].layer >= layer
-      and not richerReplacement
     then
       -- identical node already exists, exit here
       return
@@ -1026,7 +893,6 @@ function pfMap:GetNodes(addon, title)
 end
 
 function pfMap:DeleteNode(addon, title)
-  if addon == "PFQUEST" and title then unifiedcache[title] = nil end
   if not addon then
     -- wipe everything
     pfMap.tooltips = {}
@@ -1036,12 +902,10 @@ function pfMap:DeleteNode(addon, title)
     pfMap.dirtyNodes = {}
     pfMap.dirtyMinimapNodes = {}
     pfMap.dirtyMaps = {}
-    for cachedTitle in pairs(unifiedcache) do unifiedcache[cachedTitle] = nil end
   elseif not title then
     -- wipe all nodes for this addon; clean up both reverse indexes
     if pfMap.titleIndex[addon] then
       for t, maps in pairs(pfMap.titleIndex[addon]) do
-        if addon == "PFQUEST" then unifiedcache[t] = nil end
         -- clean tooltipIndex entries that belonged to this addon's titles
         local spawns = pfMap.tooltipIndex[t]
         if spawns then
@@ -1170,9 +1034,6 @@ function pfMap:NodeEnter()
 
   for title, meta in pairs(this.node) do
     pfMap:ShowTooltip(meta, tooltip)
-    for _, variant in pairs(meta.questVariants or {}) do
-      pfMap:ShowTooltip(variant, tooltip)
-    end
   end
 
   -- add tooltip help if setting is enabled
@@ -1275,7 +1136,6 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
   frame.layer = 0
 
   for title, tab in pairs(node) do
-    tab = pfMap:GetActiveQuestVariant(tab)
     pfMap.highlightdb[frame][title] = true
 
     tab.layer = GetLayerByTexture(tab.texture)
@@ -1321,7 +1181,6 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
       frame.icon = tab.icon
       frame.fade_range = tab.fade_range
       frame.sharedspawns = tab.sharedspawns
-      frame.relatedobjectives = tab.relatedobjectives
 
       if pfQuest_config["spawncolors"] == "1" then
         frame.color = tab.spawn or tab.title
@@ -1565,37 +1424,11 @@ function pfMap:CacheCurrentExploration(mapID)
   end
 end
 
-local function RememberCurrentZoneQuest(map, title, node)
-  if tonumber(pfQuest_config["trackingmethod"]) ~= 5 or not map or not node then return end
-  local questid = tonumber(node.questid)
-  if not questid or not (pfQuest.questlog and pfQuest.questlog[questid]) then return end
-  pfMap.currentZoneTracker = pfMap.currentZoneTracker or {}
-  pfMap.currentZoneTracker[map] = pfMap.currentZoneTracker[map] or {}
-  pfMap.currentZoneTracker[map][questid] = title
-end
-
 function pfMap:UpdateNodes()
   pfQuest:Debug("Update Nodes")
 
   local color = pfQuest_config["spawncolors"] == "1" and "spawn" or "title"
   local map = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
-  local playerMap = pfMap:GetPlayerMapID()
-  local worldMapShown = WorldMapFrame:IsShown()
-  -- Closing a manually selected zone can leave the client's map selection on
-  -- that zone briefly. Hidden route/tracker work always belongs to the player.
-  if not worldMapShown and playerMap then map = playerMap end
-  local updateRoute = not playerMap or map == playerMap
-  -- GetPlayerMapPosition() resolves relative to whichever zone the World Map
-  -- is currently displaying, not the player's real zone. Browsing elsewhere
-  -- therefore makes it return 0,0, which route.lua's own OnUpdate scripts
-  -- would otherwise read as "position unresolvable" and hide the arrow /
-  -- clear the drawn path -- even though the player isn't actually lost, they
-  -- just aren't looking at their own zone. Expose that distinction so those
-  -- scripts can tell "browsing away" apart from a genuine invalid position.
-  pfMap.browsingOtherZone = worldMapShown and not updateRoute or nil
-  if pfQuest.route and pfQuest.route.SetWorldMapRouteVisible then
-    pfQuest.route:SetWorldMapRouteVisible(not worldMapShown or updateRoute)
-  end
   local i = 1
 
   -- reset tracker
@@ -1605,13 +1438,8 @@ function pfMap:UpdateNodes()
   -- render their own pins there, but the core zone-node renderer must not use
   -- nil as a dirty-map key.
   if not map then
-    -- Browsing a continent/world surface must not discard the current-zone
-    -- arrow. Only a hidden-map refresh with no resolvable player map may clear
-    -- route state.
-    if not worldMapShown then
-      pfQuest.route:Clear()
-      pfMap.lastRouteMap = nil
-    end
+    pfQuest.route:Clear()
+    pfMap.lastRouteMap = nil
     for _, pin in pairs(pfMap.pins) do
       pin:Hide()
     end
@@ -1625,7 +1453,8 @@ function pfMap:UpdateNodes()
 
   -- Current Zone Only follows the player's zone, not a different zone selected
   -- while browsing the World Map.
-  if tonumber(pfQuest_config["trackingmethod"]) == 5 and playerMap and map ~= playerMap then
+  if tonumber(pfQuest_config["trackingmethod"]) == 5 and pfMap:GetPlayerMapID() and map ~= pfMap:GetPlayerMapID() then
+    pfQuest.route:Clear()
     for _, pin in pairs(pfMap.pins) do pin:Hide() end
     if pfQuest.tracker and pfQuest.tracker.DoLayout then pfQuest.tracker.DoLayout() end
     return
@@ -1690,22 +1519,15 @@ function pfMap:UpdateNodes()
   -- hitch. Refresh only the quest tracker here; minimap pins have their own
   -- updater, and dirtyMaps keeps the full world-map render pending until the
   -- player actually opens it.
-  if not worldMapShown then
+  if not WorldMapFrame:IsShown() then
     local questNodes = pfMap.nodes.PFQUEST and pfMap.nodes.PFQUEST[map]
-    -- A login or asynchronous HDB load can establish lastRouteMap before the
-    -- quest nodes arrive. Rebuild when nodes exist but the route is still
-    -- empty, even if no later dirty-map flag survived the loading sequence.
-    local routeEmpty = not pfQuest.route.coords or table.getn(pfQuest.route.coords) == 0
+    local rawObjectiveCandidates = {}
     local rebuildRoute = pfMap.lastRouteMap ~= map or pfMap.dirtyMaps[map]
-      or (routeEmpty and questNodes and next(questNodes))
     if rebuildRoute then
       pfQuest.route:Reset()
       pfMap.lastRouteMap = map
     end
-    local playerX, playerY = GetPlayerMapPosition("player")
-    playerX, playerY = (playerX or 0) * 100, (playerY or 0) * 100
-    local rawObjectiveCandidates = {}
-    for coords, node in pairs(FilterBoundaryAliases(questNodes)) do
+    for coords, node in pairs(questNodes or {}) do
       local x, y
       if coord_cache[coords] then
         x, y = coord_cache[coords][1], coord_cache[coords][2]
@@ -1717,8 +1539,6 @@ function pfMap:UpdateNodes()
       local routeNode
       local routeLayer = 0
       for title, meta in pairs(node) do
-        meta = pfMap:GetActiveQuestVariant(meta)
-        RememberCurrentZoneQuest(map, title, meta)
         pfQuest.tracker.ButtonAdd(title, meta)
         pfQuest.tracker.RegisterQuestPoint(title, meta, x, y)
 
@@ -1733,30 +1553,13 @@ function pfMap:UpdateNodes()
           routeNode.title = title
           routeLayer = meta.layer
         end
-
-        -- A coordinate can contain both an active objective and a textured
-        -- starter/ender from another quest. The texture wins the visible pin,
-        -- but the underlying objective must remain available to routing.
-        if meta.spawn and not meta.texture
-          and meta.QTYPE and string.find(meta.QTYPE, "OBJECTIVE", 1, true)
-          and (meta.addon ~= "PFPARTY" or pfQuest_config["showPartyQuestPinsRoutable"] ~= "0") then
-          table.insert(rawObjectiveCandidates, { x, y, meta, nil, true })
-        end
       end
 
-      local rawObjective = routeNode and routeNode.layer == 1 and not routeNode.texture
-        and routeNode.QTYPE and string.find(routeNode.QTYPE, "OBJECTIVE", 1, true)
-        and (routeNode.addon ~= "PFPARTY" or pfQuest_config["showPartyQuestPinsRoutable"] ~= "0")
       if rebuildRoute and routeNode then
-        -- The hidden World Map path deliberately skips cluster-frame work.
-        -- Item-loot and kill objectives therefore remain ordinary spawn nodes
-        -- (layer 1) even when objective routing is enabled. Treat those raw
-        -- objective nodes as the route source until the visible map builds
-        -- its clusters.
         local routeEligible =
           (routeNode.addon ~= "PFPARTY" or pfQuest_config["showPartyQuestPinsRoutable"] ~= "0")
           and (
-            (pfQuest_config["routecluster"] == "1" and (routeNode.layer >= 9 or rawObjective))
+            (pfQuest_config["routecluster"] == "1" and routeNode.layer >= 9)
             or (pfQuest_config["routeender"] == "1" and routeNode.layer == 4)
             or (pfQuest_config["routestarter"] == "1" and routeNode.layer == 1 and routeNode.texture)
             or (pfQuest_config["routestarter"] == "1" and routeNode.layer == 2)
@@ -1769,9 +1572,7 @@ function pfMap:UpdateNodes()
         hidden = hidden or (pfQuest_config["showcluster"] == "0" and routeNode.cluster)
         hidden = hidden or (pfQuest_config["showspawn"] == "0" and not routeNode.texture)
         if routeEligible and not hidden then
-          if not rawObjective then
-            pfQuest.route:AddPoint({ x, y, routeNode })
-          end
+          pfQuest.route:AddPoint({ x, y, routeNode })
         end
       end
     end
@@ -1788,7 +1589,7 @@ function pfMap:UpdateNodes()
     -- clustered entry to out-prioritize.
     local partyNodes = pfMap.nodes.PFPARTY and pfMap.nodes.PFPARTY[map]
     if partyNodes and pfQuest_config["showPartyQuestPinsRoutable"] ~= "0" then
-      for coords, node in pairs(FilterBoundaryAliases(partyNodes)) do
+      for coords, node in pairs(partyNodes) do
         local x, y
         if coord_cache[coords] then
           x, y = coord_cache[coords][1], coord_cache[coords][2]
@@ -1809,29 +1610,16 @@ function pfMap:UpdateNodes()
     if pfQuest.tracker and pfQuest.tracker.DoLayout then
       pfQuest.tracker.DoLayout()
     end
-    -- This hidden pass updates the tracker, minimap inputs, and route only.
-    -- It does not rebuild the existing World Map pin frames, so keep the map
-    -- dirty until a visible UpdateNodes pass consumes the changed node set.
     return
   end
 
   -- A tracker/UI refresh can call UpdateNodes without changing any map node.
   -- Keep the existing route in that case; resetting it redraws the path every
   -- couple of seconds even though its inputs are unchanged.
-  if updateRoute and (pfMap.lastRouteMap ~= map or pfMap.dirtyMaps[map]) then
+  if pfMap.lastRouteMap ~= map or pfMap.dirtyMaps[map] then
     pfQuest.route:Reset()
     pfMap.lastRouteMap = map
   end
-
-  -- The loop below only sends clustered/ender/starter pins through AddPoint,
-  -- to avoid drawing a route through every raw spawn. A lone (non-clustered)
-  -- item/unit objective never qualifies for that, so without this it was
-  -- invisible to routing entirely while the map was open -- only a
-  -- coincidentally cluster- or ender-eligible objective elsewhere could ever
-  -- win the arrow, regardless of which one was actually closer. Collect raw
-  -- objective candidates here too, same as the hidden-map path above, so
-  -- route.lua's OnUpdate can pick the nearest one every tick.
-  local rawObjectiveCandidates = {}
 
   -- refresh all nodes
   local n_pins, n_skipped = 0, 0
@@ -1847,6 +1635,16 @@ function pfMap:UpdateNodes()
   if not WorldMapButton:IsVisible() and WorldMapDetailFrame and WorldMapDetailFrame:IsVisible() then
     mapParent = WorldMapDetailFrame
   end
+  -- A party-quest pin never gets a "cluster" pin the way the player's own
+  -- quest objectives do (that only happens inside pfDatabase:SearchQuestID,
+  -- which is tied to the player's own qlogid), so it stays an ordinary
+  -- un-clustered, untextured layer-1 node even with the World Map open and
+  -- would otherwise never satisfy any routeEligible condition below. Collect
+  -- it as a raw route candidate instead, the same way pfQuest-HDB's map.lua
+  -- does for its own closed-map item objectives; route.lua picks the nearest
+  -- one on every movement tick. Scoped to PFPARTY only so this never changes
+  -- routing for the player's own (already-working) quest objectives.
+  local rawObjectiveCandidates = {}
   for addon, _ in pairs(pfMap.nodes) do
     if pfMap.nodes[addon][map] then
       for coords, node in pairs(FilterBoundaryAliases(pfMap.nodes[addon][map])) do
@@ -1880,35 +1678,27 @@ function pfMap:UpdateNodes()
           coord_cache[coords] = { x, y }
         end
 
-        -- Mirror the hidden-map path's raw-objective detection: pick the
-        -- same highest-priority entry UpdateNode would bind to this pin,
-        -- without touching frame state.
-        do
-          local routeNode
-          local routeLayer = 0
-          for title, meta in pairs(node) do
-            meta = pfMap:GetActiveQuestVariant(meta)
-            local layer = GetLayerByTexture(meta.texture)
-            if meta.cluster and meta.priority then
-              layer = layer + (10 - min(meta.priority, 10))
-            end
-            if meta.spawn and (layer > routeLayer or not routeNode) then
-              routeNode = meta
-              routeNode.title = title
-              routeLayer = layer
-            end
-
-            -- Preserve active objectives hidden beneath a higher-priority
-            -- textured marker at the same coordinates.
-            if updateRoute and meta.spawn and not meta.texture
-              and meta.QTYPE and string.find(meta.QTYPE, "OBJECTIVE", 1, true)
-              and (meta.addon ~= "PFPARTY" or pfQuest_config["showPartyQuestPinsRoutable"] ~= "0") then
-              table.insert(rawObjectiveCandidates, { x, y, meta, nil, true })
-            end
+        -- QTYPE lives only on the raw per-title meta table, not on the pin
+        -- frame (UpdateNode never copies it there), so a PFPARTY raw-objective
+        -- check has to re-pick the same highest-priority entry UpdateNode
+        -- would bind to this pin, mirroring pfQuest-HDB's map.lua.
+        local partyRouteNode
+        local partyRouteLayer = 0
+        for title, meta in pairs(node) do
+          local layer = GetLayerByTexture(meta.texture)
+          if meta.cluster and meta.priority then
+            layer = layer + (10 - min(meta.priority, 10))
           end
-          local rawObjective = routeNode and routeLayer == 1 and not routeNode.texture
-            and routeNode.QTYPE and string.find(routeNode.QTYPE, "OBJECTIVE", 1, true)
-            and (routeNode.addon ~= "PFPARTY" or pfQuest_config["showPartyQuestPinsRoutable"] ~= "0")
+          if meta.spawn and (layer > partyRouteLayer or not partyRouteNode) then
+            partyRouteNode = meta
+            partyRouteLayer = layer
+          end
+        end
+        local rawObjective = partyRouteNode and partyRouteLayer == 1 and not partyRouteNode.texture
+          and partyRouteNode.QTYPE and string.find(partyRouteNode.QTYPE, "OBJECTIVE", 1, true)
+          and partyRouteNode.addon == "PFPARTY" and pfQuest_config["showPartyQuestPinsRoutable"] ~= "0"
+        if rawObjective then
+          table.insert(rawObjectiveCandidates, { x, y, partyRouteNode, nil, true })
         end
 
         -- Route eligibility is determined here, but the point is only added
@@ -1928,8 +1718,6 @@ function pfMap:UpdateNodes()
         -- display preference. Hidden objective spawns are still active quests
         -- and must remain visible in Current Zone Only mode.
         for title, node in pairs(pfMap.pins[i].node) do
-          node = pfMap:GetActiveQuestVariant(node)
-          RememberCurrentZoneQuest(map, title, node)
           pfQuest.tracker.ButtonAdd(title, node)
           pfQuest.tracker.RegisterQuestPoint(title, node, x, y)
         end
@@ -1960,7 +1748,7 @@ function pfMap:UpdateNodes()
           end
 
           pfMap.pins[i]:Show()
-          if updateRoute and routeEligible then
+          if routeEligible then
             pfQuest.route:AddPoint({ x, y, pfMap.pins[i] })
           end
         end
@@ -1970,9 +1758,7 @@ function pfMap:UpdateNodes()
       end
     end
   end
-  if updateRoute then
-    pfQuest.route:SetRawObjectiveCandidates(rawObjectiveCandidates)
-  end
+  pfQuest.route:SetRawObjectiveCandidates(rawObjectiveCandidates)
   pfQuest:Debug(format("UpdateNodes pins=%d skipped=%d", n_pins, n_skipped))
 
   -- hide remaining pins
@@ -2500,8 +2286,8 @@ if compat.client >= 30300 then
     WorldMapFrame_ClearQuestPOIs()
     if not IsShiftKeyDown() then
       pfMap.highlight = nil
-      local questLogIndex = compat.GetQuestLogSelection()
-      local title = compat.GetQuestLogTitle(questLogIndex)
+      local questLogIndex = GetQuestLogSelection()
+      local title = GetQuestLogTitle(questLogIndex)
 
       if title then
         if previousTitle == title then

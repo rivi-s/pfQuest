@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["koKR-tbc"] = {
   [4] = "화톳불",
   [38] = "Captain Sanders Chest",

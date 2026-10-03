@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["frFR-tbc"] = {
   [4] = "Dégâts Feu de joie",
   [35] = "Coffre du capitaine",

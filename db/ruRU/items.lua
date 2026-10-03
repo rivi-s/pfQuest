@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["ruRU"] = {
   [17] = "Ярость Мартина",
   [25] = "Иссеченный короткий меч",

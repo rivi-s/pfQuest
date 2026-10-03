@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["koKR-tbc"] = {
   [2] = "_",
   [25] = "소형 미스릴 기계용",

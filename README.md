@@ -198,9 +198,3 @@ The `mines` and `herbs` lists support an optional skill range and an `auto` shor
 ```
 
 Available tracking lists: `auctioneer`, `banker`, `battlemaster`, `chests`, `fish`, `flight`, `herbs`, `innkeeper`, `mailbox`, `meetingstone`, `mines`, `rares`, `repair`, `spirithealer`, `stablemaster`, `vendor`
-
-
-### Optional HearthDB support
-
-The standard download still works with its bundled Lua database. HearthDB is an
-optional release installation; see [HDB.md](HDB.md) for package requirements.

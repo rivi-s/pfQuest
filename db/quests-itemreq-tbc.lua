@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["quests-itemreq"]["data-tbc"] = {
   [4472] = {
     [-300139] = "4141",

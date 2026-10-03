@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["deDE"] = {
   [17] = "Martinsfuror",
   [25] = "Abgenutztes Kurzschwert",

@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["deDE-tbc"] = {
   [1] = "Wegpunkt",
   [2] = "_",

@@ -53,61 +53,11 @@ local function EnableTooltips(frame, tooltips)
   end)
 end
 
-local function RenderHDBEntityTooltip(button, record)
-  if not button.hdbTooltipActive then return end
-  GameTooltip:SetOwner(button, "ANCHOR_LEFT", -10, -5)
-  GameTooltip:ClearLines()
-  GameTooltip:SetText(record.title or button.name or UNKNOWN, 0.3, 1, 0.8)
-  if record.kind == "U" then
-    if record.level and record.level ~= "" then
-      GameTooltip:AddLine(" ")
-      GameTooltip:AddDoubleLine(pfQuest_Loc["Level"], record.level, 1, 1, 0.8, 1, 1, 1)
-    end
-    local hostile = "|c00ff0000" .. pfQuest_Loc["Hostile"] .. "|r"
-    local friendly = "|c0000ff00" .. pfQuest_Loc["Friendly"] .. "|r"
-    local alliance, horde = hostile, hostile
-    if record.faction == "AH" then alliance, horde = friendly, friendly
-    elseif record.faction == "A" then alliance = friendly
-    elseif record.faction == "H" then horde = friendly end
-    GameTooltip:AddLine("\n" .. pfQuest_Loc["Reaction"], 1, 1, 0.8)
-    GameTooltip:AddDoubleLine(pfQuest_Loc["Alliance"], alliance, 1, 1, 1, 0, 0, 0)
-    GameTooltip:AddDoubleLine(pfQuest_Loc["Horde"], horde, 1, 1, 1, 0, 0, 0)
-    if record.rank and record.rank ~= "" then
-      local ranks = { ["1"] = "Elite", ["2"] = "Rare Elite", ["3"] = "Boss", ["4"] = "Rare" }
-      GameTooltip:AddDoubleLine("Rank", ranks[tostring(record.rank)] or record.rank, 1, 1, 0.8, 1, 0.7, 0.2)
-    end
-  end
-  GameTooltip:AddLine("\n" .. pfQuest_Loc["Location"], 1, 1, 0.8)
-  local unknown = true
-  for zone, count in pairs(record.zones or {}) do
-    GameTooltip:AddDoubleLine(pfMap:GetMapNameByID(zone) or UNKNOWN, count, 1, 1, 1, 0.3, 1, 0.8)
-    unknown = nil
-  end
-  if unknown then GameTooltip:AddLine(UNKNOWN, 1, 0.5, 0.5) end
-  GameTooltip:Show()
-end
-
-local function QueueHDBEntityTooltip(button, record)
-  button.hdbTooltipRecord = record
-  button:SetScript("OnUpdate", function()
-    this:SetScript("OnUpdate", nil)
-    local queued = this.hdbTooltipRecord
-    this.hdbTooltipRecord = nil
-    if queued then RenderHDBEntityTooltip(this, queued) end
-  end)
-end
-
 local function ResultButtonEnter()
-  this.hdbTooltipActive = true
   this.tex:SetTexture(1, 1, 1, 0.1)
 
   -- quest
   if this.btype == "quests" then
-    GameTooltip:SetOwner(this, "ANCHOR_LEFT", -10, -5)
-    GameTooltip:SetText(this.name or UNKNOWN, 0.3, 1, 0.8)
-    GameTooltip:Show()
-    if type(pfDatabase.ShowExtendedTooltipHDB) == "function"
-      and pfDatabase:ShowExtendedTooltipHDB(this.id, GameTooltip, this, "ANCHOR_LEFT", -10, -5) then return end
     pfDatabase:ShowExtendedTooltip(this.id, GameTooltip, this, "ANCHOR_LEFT", -10, -5)
 
   -- item
@@ -120,15 +70,6 @@ local function ResultButtonEnter()
   else
     local id = this.id
     local name = this.name
-    local button = this
-    local kind = button.btype == "units" and "U" or "O"
-    GameTooltip:SetOwner(button, "ANCHOR_LEFT", -10, -5)
-    GameTooltip:SetText(name or UNKNOWN, 0.3, 1, 0.8)
-    GameTooltip:Show()
-    if pfDatabase:GetEntityInfoHDB(kind, id, function(record, err)
-      if not err and record then QueueHDBEntityTooltip(button, record) end
-    end) then return end
-
     -- Reuse tooltip_maps table instead of creating new one each hover
     clear_tooltip_maps()
     local maps = tooltip_maps
@@ -218,46 +159,28 @@ local function ResultButtonClick()
     SetItemRef(link, text, arg1)
   elseif this.btype == "quests" then
     if IsShiftKeyDown() then
-      pfQuestCompat.InsertQuestLink(this.id, this.name, this.hdbLevel)
+      pfQuestCompat.InsertQuestLink(this.id)
     elseif pfBrowser.selectState then
-      if pfDatabase:SearchQuestTitleHDB(this.name, meta, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then return end
       local maps = pfDatabase:SearchQuest(this.name, meta)
       pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
     else
-      if pfDatabase:SearchQuestPreviewHDB(this.id, meta, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then return end
       local maps = pfDatabase:SearchQuestID(this.id, meta)
       pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
     end
   elseif this.btype == "units" then
     if pfBrowser.selectState then
-      if pfDatabase:SearchEntityTitleHDB("U", this.name, meta, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then return end
       local maps = pfDatabase:SearchMob(this.name, meta)
       pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
     else
-      if pfDatabase:SearchEntityIDHDB("U", this.id, meta, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then return end
       local maps = pfDatabase:SearchMobID(this.id, meta)
       pfMap.queue_update = GetTime()
       pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
     end
   elseif this.btype == "objects" then
     if pfBrowser.selectState then
-      if pfDatabase:SearchEntityTitleHDB("O", this.name, meta, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then return end
       local maps = pfDatabase:SearchObject(this.name, meta)
       pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
     else
-      if pfDatabase:SearchEntityIDHDB("O", this.id, meta, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then return end
       local maps = pfDatabase:SearchObjectID(this.id, meta)
       pfMap.queue_update = GetTime()
       pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
@@ -277,8 +200,6 @@ local function ResultButtonClickFav()
 end
 
 local function ResultButtonLeave()
-  this.hdbTooltipActive = nil
-  this.hdbTooltipRecord = nil
   if pfBrowser.selectState then
     pfBrowser.selectState = "clean"
   end
@@ -297,87 +218,19 @@ local function ResultButtonClickSpecial()
   local maps = {}
   if this.buttonType == "O" or this.buttonType == "U" then
     if this.selectState then
-      if pfDatabase:SearchItemTitleHDB(this:GetParent().name, meta, { [this.buttonType] = true }, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then
-        return
-      end
       maps = pfDatabase:SearchItem(this:GetParent().name, meta)
     else
-      if pfDatabase:SearchItemIDHDB(param, meta, { [this.buttonType] = true }, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end, true) then
-        return
-      end
       maps = pfDatabase:SearchItemID(param, meta, nil, { [this.buttonType] = true })
     end
   elseif this.buttonType == "V" then
-    if this.selectState then
-      if pfDatabase:SearchItemTitleHDB(param, meta, { V = true }, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then
-        return
-      end
-    else
-      if pfDatabase:SearchItemIDHDB(this:GetParent().id, meta, { V = true }, function(nativeMaps)
-        pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-      end) then
-        return
-      end
-    end
     maps = pfDatabase:SearchVendor(param, meta)
   end
   pfMap.queue_update = GetTime()
   pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
 end
 
-local function RenderHDBItemSourceTooltip(button, id, sourceType, record)
-  if not MouseIsOver(button) then return end
-  local caption = sourceType == "V" and pfQuest_Loc["Sold by"] or pfQuest_Loc["Looted from"]
-  local seen, rows, extra = {}, {}, 0
-  for index = 1, table.getn(record.sources or {}) do
-    local source = record.sources[index]
-    local key = source.kind .. ":" .. tostring(source.id)
-    if source.kind == sourceType and not seen[key] then
-      seen[key] = true
-      if table.getn(rows) < tooltip_limit then
-        table.insert(rows, source)
-      else
-        extra = extra + 1
-      end
-    end
-  end
-  if table.getn(rows) == 0 then return end
-  GameTooltip:SetOwner(pfBrowser, "ANCHOR_CURSOR")
-  GameTooltip:ClearLines()
-  GameTooltip:SetText(caption, 0.3, 1, 0.8)
-  for index = 1, table.getn(rows) do
-    local source = rows[index]
-    local name = source.title or UNKNOWN
-    if sourceType == "V" and source.chance and source.chance ~= 0 then
-      name = name .. " (" .. source.chance .. ")"
-    end
-    local zone = source.zoneID and pfMap:GetMapNameByID(source.zoneID) or UNKNOWN
-    GameTooltip:AddDoubleLine(name, zone, 1, 1, 1, 0.5, 0.5, 0.5)
-  end
-  if extra > 0 then
-    GameTooltip:AddLine("\n" .. pfQuest_Loc["and"] .. " " .. extra .. " " .. pfQuest_Loc["others"], 0.8, 0.8, 0.8)
-  end
-  GameTooltip:Show()
-end
-
 local function ResultButtonEnterSpecial()
   local id = this:GetParent().id
-  local button = this
-
-  -- HearthDB owns item-source details when available. Avoid walking the large
-  -- Lua item and reference-loot tables before the asynchronous result arrives.
-  if pfDatabase:GetItemSourcesHDB(id, function(record, err)
-    if not err and record then RenderHDBItemSourceTooltip(button, id, button.buttonType, record) end
-  end) then
-    return
-  end
-
   local count = 0
   local skip = false
 
@@ -385,7 +238,7 @@ local function ResultButtonEnterSpecial()
 
   -- unit
   if this.buttonType == "U" then
-    if items[id] and items[id]["U"] then
+    if items[id]["U"] then
       GameTooltip:SetText(pfQuest_Loc["Looted from"], 0.3, 1, 0.8)
       for unitID, chance in pairs(items[id]["U"]) do
         count = count + 1
@@ -436,7 +289,7 @@ local function ResultButtonEnterSpecial()
 
   -- object
   elseif this.buttonType == "O" then
-    if items[id] and items[id]["O"] then
+    if items[id]["O"] then
       GameTooltip:SetText(pfQuest_Loc["Looted from"], 0.3, 1, 0.8)
       for objectID, chance in pairs(items[id]["O"]) do
         count = count + 1
@@ -487,7 +340,7 @@ local function ResultButtonEnterSpecial()
 
   -- vendor
   elseif this.buttonType == "V" then
-    if items[id] and items[id]["V"] then
+    if items[id]["V"] then
       GameTooltip:SetText(pfQuest_Loc["Sold by"], 0.3, 1, 0.8)
       for unitID, sellcount in pairs(items[id]["V"]) do
         count = count + 1
@@ -537,8 +390,7 @@ local function ResultButtonReload(self)
     self.factionA:Hide()
     self.factionH:Hide()
 
-    local raceMask = self.hdbRaceMask ~= nil and self.hdbRaceMask
-      or pfDatabase:GetRaceMaskByID(self.id, self.btype)
+    local raceMask = pfDatabase:GetRaceMaskByID(self.id, self.btype)
     if (bit.band(77, raceMask) > 0) or (raceMask == 0 and self.btype == "quests") then
       self.factionA:Show()
     end
@@ -556,39 +408,24 @@ local function ResultButtonReload(self)
 
   -- actions by search type
   if self.btype == "quests" then
-    self.name = self.name or (pfDB[self.btype]["loc"][self.id] and pfDB[self.btype]["loc"][self.id]["T"]) or UNKNOWN
-    local level = self.hdbLevel
-      or (pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["lvl"])
-      or 0
+    self.name = pfDB[self.btype]["loc"][self.id]["T"]
+    local level = pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["lvl"] or 0
     self.text:SetText("|cffffcc00|Hquest:" .. self.id .. ":" .. level .. "|h[" .. self.name .. "]|h|r")
   elseif self.btype == "units" or self.btype == "objects" then
-    local level = self.hdbLevel
-      or (pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["lvl"])
-      or ""
-    if level == "N/A" then level = "" end
+    local level = pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["lvl"] or ""
     if level and level ~= "" then
       level = " (" .. level .. ")"
     end
     self.text:SetText(self.name .. "|cffaaaaaa" .. level)
 
-    local hasSpawns = self.hdbHasSpawns
-    if hasSpawns == nil then
-      hasSpawns = pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["coords"]
-    end
-    if hasSpawns then
+    if pfDB[self.btype]["data"][self.id] and pfDB[self.btype]["data"][self.id]["coords"] then
       self.text:SetTextColor(1, 1, 1)
     else
       self.text:SetTextColor(0.5, 0.5, 0.5)
     end
   elseif self.btype == "items" then
-    local hdbSources = {
-      U = self.hdbHasUnitSources,
-      O = self.hdbHasObjectSources,
-      V = self.hdbHasVendorSources,
-    }
     for _, key in ipairs({ "U", "O", "V" }) do
-      if hdbSources[key] ~= nil and hdbSources[key]
-        or hdbSources[key] == nil and items[self.id] and items[self.id][key] then
+      if items[self.id] and items[self.id][key] then
         self[key]:Show()
       else
         self[key]:Hide()
@@ -732,12 +569,6 @@ local function RefreshView(i, key, caption)
       pfBrowser.tabs[key].buttons[j]:Hide()
       pfBrowser.tabs[key].buttons[j].id = nil
       pfBrowser.tabs[key].buttons[j].name = nil
-      pfBrowser.tabs[key].buttons[j].hdbLevel = nil
-      pfBrowser.tabs[key].buttons[j].hdbRaceMask = nil
-      pfBrowser.tabs[key].buttons[j].hdbHasSpawns = nil
-      pfBrowser.tabs[key].buttons[j].hdbHasUnitSources = nil
-      pfBrowser.tabs[key].buttons[j].hdbHasObjectSources = nil
-      pfBrowser.tabs[key].buttons[j].hdbHasVendorSources = nil
     end
   end
 end
@@ -1002,40 +833,6 @@ end)
 -- This script updates all the search tabs when the search text changes
 local searchPending = false
 local searchText = ""
-local nativeQuestSearchRequest = 0
-local nativeEntitySearchRequest = { units = 0, objects = 0 }
-local nativeItemSearchRequest = 0
-
-local function RenderSearchResults(searchType, caption, data)
-  local count = 0
-  for id, value in pairs(data or {}) do
-    count = count + 1
-    if count >= search_limit then
-      break
-    end
-    pfBrowser.tabs[searchType].buttons[count] = pfBrowser.tabs[searchType].buttons[count]
-      or ResultButtonCreate(count, searchType)
-    local button = pfBrowser.tabs[searchType].buttons[count]
-    local record = type(value) == "table" and value or nil
-    button.id = id
-    button.name = record and record.title or value
-    button.hdbLevel = record and record.level or nil
-    button.hdbRaceMask = record and record.raceMask or nil
-    button.hdbHasSpawns = record and record.hasSpawns
-    button.hdbHasUnitSources = record and record.hasUnitSources
-    button.hdbHasObjectSources = record and record.hasObjectSources
-    button.hdbHasVendorSources = record and record.hasVendorSources
-    button:Reload()
-  end
-  RefreshView(count, searchType, caption)
-end
-
-local function RenderLuaSearch(searchType, caption, text, custom)
-  local data = (strlen(text) >= 3 or custom) and pfDatabase:GetIDByName(text, searchType, true, custom)
-    or pfBrowser_fav[searchType]
-  RenderSearchResults(searchType, caption, data)
-end
-
 pfBrowser.input:SetScript("OnTextChanged", function()
   local text = this:GetText()
   if text == pfQuest_Loc["Search"] then
@@ -1061,24 +858,16 @@ pfBrowser:SetScript("OnUpdate", function()
     local entry = table.remove(pfBrowser.favqueue, 1)
     local ftype, id = entry[1], entry[2]
     if ftype == "units" then
-      if not pfDatabase:SearchEntityIDHDB("U", id) then
-        pfDatabase:SearchMobID(id)
-      end
+      pfDatabase:SearchMobID(id)
     end
     if ftype == "objects" then
-      if not pfDatabase:SearchEntityIDHDB("O", id) then
-        pfDatabase:SearchObjectID(id)
-      end
+      pfDatabase:SearchObjectID(id)
     end
     if ftype == "items" then
-      if not pfDatabase:SearchItemIDHDB(id) then
-        pfDatabase:SearchItemID(id)
-      end
+      pfDatabase:SearchItemID(id)
     end
     if ftype == "quests" then
-      if not pfDatabase:SearchQuestPreviewHDB(id) then
-        pfDatabase:SearchQuestID(id)
-      end
+      pfDatabase:SearchQuestID(id)
     end
     pfMap.queue_update = GetTime()
   end
@@ -1096,53 +885,23 @@ pfBrowser:SetScript("OnUpdate", function()
 
       for _, caption in ipairs({ "Units", "Objects", "Items", "Quests" }) do
         local searchType = strlower(caption)
-        local nativeSearch = (strlen(text) >= 3 or tonumber(text)) and not custom
+        local data = (strlen(text) >= 3 or custom) and pfDatabase:GetIDByName(text, searchType, true, custom)
+          or pfBrowser_fav[searchType]
 
-        -- HearthDB answers the standard title tabs directly. Only use the
-        -- Lua index if the optional provider cannot accept or complete the
-        -- request; otherwise a search needlessly scans both databases.
-        if searchType == "quests" and nativeSearch then
-          nativeQuestSearchRequest = nativeQuestSearchRequest + 1
-          local request = nativeQuestSearchRequest
-          local accepted = pfDatabase:SearchQuestTitlesHDB(text, search_limit, function(nativeData, err)
-            if request ~= nativeQuestSearchRequest or text ~= searchText then return end
-            if err or not nativeData then
-              RenderLuaSearch("quests", "Quests", text, custom)
-            else
-              RenderSearchResults("quests", "Quests", nativeData)
-            end
-          end)
-          if not accepted then RenderLuaSearch("quests", "Quests", text, custom) end
-        elseif searchType == "items" and nativeSearch then
-          nativeItemSearchRequest = nativeItemSearchRequest + 1
-          local request = nativeItemSearchRequest
-          local accepted = pfDatabase:SearchItemTitlesHDB(text, search_limit, function(nativeData, err)
-            if request ~= nativeItemSearchRequest or text ~= searchText then return end
-            if err or not nativeData then
-              RenderLuaSearch("items", "Items", text, custom)
-            else
-              RenderSearchResults("items", "Items", nativeData)
-            end
-          end)
-          if not accepted then RenderLuaSearch("items", "Items", text, custom) end
-        elseif (searchType == "units" or searchType == "objects") and nativeSearch then
-          nativeEntitySearchRequest[searchType] = nativeEntitySearchRequest[searchType] + 1
-          local resultType = searchType
-          local resultCaption = caption
-          local request = nativeEntitySearchRequest[resultType]
-          local kind = resultType == "units" and "U" or "O"
-          local accepted = pfDatabase:SearchEntityTitlesHDB(kind, text, search_limit, function(nativeData, err)
-            if request ~= nativeEntitySearchRequest[resultType] or text ~= searchText then return end
-            if err or not nativeData then
-              RenderLuaSearch(resultType, resultCaption, text, custom)
-            else
-              RenderSearchResults(resultType, resultCaption, nativeData)
-            end
-          end)
-          if not accepted then RenderLuaSearch(resultType, resultCaption, text, custom) end
-        else
-          RenderLuaSearch(searchType, caption, text, custom)
+        local i = 0
+        for id, text in pairs(data) do
+          i = i + 1
+          if i >= search_limit then
+            break
+          end
+          pfBrowser.tabs[searchType].buttons[i] = pfBrowser.tabs[searchType].buttons[i]
+            or ResultButtonCreate(i, searchType)
+          pfBrowser.tabs[searchType].buttons[i].id = id
+          pfBrowser.tabs[searchType].buttons[i].name = text
+          pfBrowser.tabs[searchType].buttons[i]:Reload()
         end
+
+        RefreshView(i, searchType, caption)
       end
     end
   else

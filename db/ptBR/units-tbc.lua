@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["ptBR-tbc"] = {
   [2] = "_",
   [3] = "Flesh Eater",

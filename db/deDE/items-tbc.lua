@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["deDE-tbc"] = {
   [46] = "OLDFootpad\'s Belt",
   [77] = "Deprecated Outfitter Cloth Armor",

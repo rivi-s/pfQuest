@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["quests"]["zhTW-tbc"] = {
   [2] = {
     ["D"] = "The mighty hippogryph Sharptalon has been slain, with the claw of the felled beast serving as a testament to your victory.  Senani Thunderheart at the Splintertree Post will no doubt be interested in seeing this trophy as proof of your deeds.",

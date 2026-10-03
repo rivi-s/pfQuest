@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["quests"]["data-tbc"] = {
   [1] = {
     ["lvl"] = 4,

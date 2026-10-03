@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["enUS-tbc"] = {
   [2] = "_",
   [25] = "Mithril Mechanical Dragonling",

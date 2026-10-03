@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["frFR"] = {
   [1] = "Waypoint (Only GM can see it)",
   [2] = "Spawn Point (Only GM can see it)",

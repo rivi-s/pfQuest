@@ -10,42 +10,6 @@ local GetTime = GetTime
 local MouseIsOver = MouseIsOver
 
 local collapsed = {}
-local hdbJournalTitles = {}
-local hdbJournalPending = {}
-
-local function GetJournalQuestTitle(id)
-  local cached = hdbJournalTitles[id]
-  if cached then return cached end
-
-  local nativeTitle, nativeReady, nativeAvailable
-  if type(pfDatabase.GetQuestTitleByIDHDB) == "function" then
-    nativeTitle, nativeReady, nativeAvailable = pfDatabase:GetQuestTitleByIDHDB(id)
-    if nativeTitle then
-      hdbJournalTitles[id] = nativeTitle
-      return nativeTitle
-    end
-  end
-
-  if not hdbJournalPending[id] then
-    hdbJournalPending[id] = true
-    local accepted = pfDatabase:GetQuestTextHDB(id, function(record, err)
-      hdbJournalPending[id] = nil
-      if record and record.title then
-        hdbJournalTitles[id] = record.title
-        if pfJournal then pfJournal.dirty = true end
-      end
-    end)
-    if not accepted then hdbJournalPending[id] = nil end
-  end
-
-  -- An enabled HDB provider owns this lookup. During its short login warm-up,
-  -- show the numeric ID rather than touching the localized Lua quest table.
-  if nativeAvailable then return id end
-
-  -- Compatibility fallback for normal pfQuest or an unavailable provider.
-  local locales = pfDB["quests"]["loc"][id]
-  return locales and locales["T"] or id
-end
 
 local function tablesize(tbl)
   local count = 0
@@ -64,17 +28,6 @@ local function OnEnter()
 
   if this.id then
     -- show extended quest tooltip
-    GameTooltip:SetOwner(this, "ANCHOR_LEFT", 0, -10)
-    GameTooltip:SetText(GetJournalQuestTitle(this.id), 0.3, 1, 0.8)
-    GameTooltip:Show()
-    local completedLevel = pfQuest_history[this.id] and pfQuest_history[this.id][2]
-    local function AddCompletedLevel(tooltip)
-      if not completedLevel then return end
-      local color = pfQuestCompat.GetDifficultyColor(completedLevel)
-      tooltip:AddLine("|cffffffff" .. pfQuest_Loc["Completed Level"] .. ": |r" .. completedLevel, color.r, color.g, color.b)
-    end
-    if type(pfDatabase.ShowExtendedTooltipHDB) == "function"
-      and pfDatabase:ShowExtendedTooltipHDB(this.id, GameTooltip, this, "ANCHOR_LEFT", 0, -10, AddCompletedLevel) then return end
     pfDatabase:ShowExtendedTooltip(this.id, GameTooltip, this, "ANCHOR_LEFT", 0, -10)
 
     -- add level of completion
@@ -100,15 +53,11 @@ end
 local function OnClick()
   if this.id and IsShiftKeyDown() then
     if tonumber(this.id) then
-      pfQuestCompat.InsertQuestLink(this.id, GetJournalQuestTitle(this.id))
+      pfQuestCompat.InsertQuestLink(this.id)
     else
       pfQuestCompat.InsertQuestLink(0, this.id)
     end
   elseif this.id then
-    local meta = { addon = "PFQUEST" }
-    if type(pfDatabase.SearchQuestPreviewHDB) == "function" and pfDatabase:SearchQuestPreviewHDB(this.id, meta, function(nativeMaps)
-      pfMap:ShowMapID(pfDatabase:GetBestMap(nativeMaps))
-    end) then return end
     local maps = pfDatabase:SearchQuestID(this.id, meta)
     pfMap:ShowMapID(pfDatabase:GetBestMap(maps))
   elseif this.column then
@@ -205,7 +154,7 @@ local function UpdateEntry(self, index)
     self[index]:Show()
   elseif self[index].id then
     local qid = tonumber(self[index].id) or UNKNOWN
-    local name = GetJournalQuestTitle(self[index].id)
+    local name = pfDB["quests"]["loc"][self[index].id] and pfDB["quests"]["loc"][self[index].id]["T"] or self[index].id
     local log = pfQuest_history[self[index].id][1]
     local level = pfQuest_history[self[index].id][2]
     self[index].text:SetText(

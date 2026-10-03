@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["koKR"] = {
   [4] = "Bonfire Damage",
   [31] = "오래된 사자상",

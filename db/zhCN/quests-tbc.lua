@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["quests"]["zhCN-tbc"] = {
   [2] = {
     ["D"] = "强大的角鹰兽沙普塔隆已经被你杀死了，它的爪子将成为你胜利的象征。碎木哨岗的塞娜尼·雷心一定会对你的战利品感兴趣的。",

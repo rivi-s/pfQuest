@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["deDE"] = {
   [4] = "Bonfire Damage",
   [31] = "Alte Löwenstatue",

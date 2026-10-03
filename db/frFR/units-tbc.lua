@@ -1,4 +1,3 @@
-if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["frFR-tbc"] = {
   [1] = "Waypoint (seul le GM peut le voir)",
   [2] = "_",

@@ -1,7 +1,3 @@
--- Use the table method directly instead of relying on Blizzard's optional
--- global alias. UI replacements such as Dragonflight Reforged can omit gfind.
-local gfind = string.gmatch or string.gfind
-
 -- Initialize pfUI core table for non-pfUI environments
 if not pfUI then
   pfUI = {
@@ -116,41 +112,6 @@ pfUI.api.SanitizePattern = pfUI.api.SanitizePattern
     end
 
     return sanitize_cache[pattern]
-  end
-
--- Match formatted client strings while preserving their logical %N$ capture
--- order. Some clients reorder placeholders even in English, so callers must
--- not assume the physical pattern order is name/current/required.
-local capture_cache = {}
-local function GetPatternCaptures(pattern)
-  if not capture_cache[pattern] then
-    for a, b, c, d, e in gfind(gsub(pattern, "%((.+)%)", "%1"), gsub(pattern, "%d%$", "%%(.-)$")) do
-      capture_cache[pattern] = { a, b, c, d, e }
-    end
-    capture_cache[pattern] = capture_cache[pattern] or {}
-  end
-
-  return capture_cache[pattern][1], capture_cache[pattern][2], capture_cache[pattern][3],
-    capture_cache[pattern][4], capture_cache[pattern][5]
-end
-
-pfUI.api.cmatch = pfUI.api.cmatch
-  or function(text, pattern)
-    local idx1, idx2, idx3, idx4, idx5 = GetPatternCaptures(pattern)
-    local _, _, val1, val2, val3, val4, val5 = string.find(text, pfUI.api.SanitizePattern(pattern))
-
-    local out1 = idx5 == 1 and val5 or idx4 == 1 and val4 or idx3 == 1 and val3
-      or idx2 == 1 and val2 or val1
-    local out2 = idx5 == 2 and val5 or idx4 == 2 and val4 or idx3 == 2 and val3
-      or idx1 == 2 and val1 or val2
-    local out3 = idx5 == 3 and val5 or idx4 == 3 and val4 or idx1 == 3 and val1
-      or idx2 == 3 and val2 or val3
-    local out4 = idx5 == 4 and val5 or idx1 == 4 and val1 or idx3 == 4 and val3
-      or idx2 == 4 and val2 or val4
-    local out5 = idx1 == 5 and val1 or idx4 == 5 and val4 or idx3 == 5 and val3
-      or idx2 == 5 and val2 or val5
-
-    return out1, out2, out3, out4, out5
   end
 
 local er, eg, eb, ea = 0.4, 0.4, 0.4, 1
