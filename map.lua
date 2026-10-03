@@ -1013,7 +1013,16 @@ function pfMap:NodeClick()
   end
 end
 
+function pfMap:BeginNodeTooltip(frame)
+  if self.nodeTooltipFrame and self.nodeTooltipFrame ~= frame then
+    self:ReleaseNodeTooltip(self.nodeTooltipFrame)
+  end
+  frame.pfQuestTooltip = frame.worldmap and WorldMapTooltip or GameTooltip
+  self.nodeTooltipFrame = frame
+end
+
 function pfMap:NodeEnter()
+  pfMap:BeginNodeTooltip(this)
   -- wotlk: need to disable blop tooltips first
   if compat.client >= 30300 then
     WorldMapPOIFrame.allowBlobTooltip = false
@@ -1082,7 +1091,9 @@ function pfMap:UpdateNodeTooltip()
   if not frame then return end
   local tooltip = frame.pfQuestTooltip
   if not tooltip or tooltip:GetOwner() ~= frame or not tooltip:IsShown()
-    or not frame:IsShown() or GetMouseFocus() ~= frame then
+    or not frame:IsShown()
+    or (frame.clickThrough and not MouseIsOver(frame))
+    or (not frame.clickThrough and GetMouseFocus() ~= frame) then
     self:ReleaseNodeTooltip(frame)
   end
 end
@@ -1109,12 +1120,6 @@ function pfMap:BuildNode(name, parent)
 
   f.Animate = NodeAnimate
   f:SetScript("OnEnter", function()
-    local frame = this
-    if pfMap.nodeTooltipFrame and pfMap.nodeTooltipFrame ~= frame then
-      pfMap:ReleaseNodeTooltip(pfMap.nodeTooltipFrame)
-    end
-    frame.pfQuestTooltip = frame.worldmap and WorldMapTooltip or GameTooltip
-    pfMap.nodeTooltipFrame = frame
     -- Resolve dynamically: Turtle extends NodeEnter after the core loads.
     pfMap.NodeEnter()
   end)
