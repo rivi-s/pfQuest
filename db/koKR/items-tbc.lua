@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["koKR-tbc"] = {
   [38] = "훈련생용 셔츠",
   [39] = "훈련생용 바지",

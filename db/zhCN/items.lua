@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["zhCN"] = {
   [17] = "Martin Fury",
   [25] = "破损的短剑",

@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["esES-tbc"] = {
   [4] = "Daño de fogata",
   [38] = "Captain Sanders Chest",

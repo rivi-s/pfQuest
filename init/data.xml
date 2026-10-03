@@ -1,4 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Include file="backend.lua" />
   <Include file="..\db\init.lua" />
   <Include file="..\db\items.lua" />
   <Include file="..\db\units.lua" />

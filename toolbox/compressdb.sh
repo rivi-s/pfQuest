@@ -8,6 +8,12 @@ function compress() {
 
   sed 's/  //g' -i $1
 
+  backend_guard=""
+  if head -n 1 "$1" | grep -q '^if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end$'; then
+    backend_guard='if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end'
+    sed '1d' -i "$1"
+  fi
+
   if [ "$2" = "ws" ]; then
     # even remove single whitespaces
     sed 's/ //g' -i $1
@@ -16,6 +22,10 @@ function compress() {
   sed 's/ = /=/g' -i $1
   tr -d '\n' < $1 > /tmp/$(basename $1)
   mv /tmp/$(basename $1) $1
+  if [ -n "$backend_guard" ]; then
+    { printf '%s\n' "$backend_guard"; cat "$1"; } > /tmp/$(basename $1)
+    mv /tmp/$(basename $1) $1
+  fi
 }
 
 echo "===== compressing DB (Vanilla) ====="

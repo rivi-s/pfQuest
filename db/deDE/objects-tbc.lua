@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["deDE-tbc"] = {
   [4] = "Freudenfeuerschaden",
   [37] = "Elizas Grabstein",

@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["ruRU-tbc"] = {
   [4] = "Урон от огня",
   [38] = "Captain Sanders Chest",

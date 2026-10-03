@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["ptBR-tbc"] = {
   [32] = "Sunken Chest",
   [38] = "Captain Sanders Chest",

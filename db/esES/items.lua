@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["esES"] = {
   [17] = "Martin Furia",
   [25] = "Espada corta desgastada",

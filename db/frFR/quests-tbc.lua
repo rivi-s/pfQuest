@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["quests"]["frFR-tbc"] = {
   [1] = {
     ["D"] = "$Tpunk ;! Tuez Kobold Vermin, 2 d\'entre eux.NOUVEAU TEST ENCORE",

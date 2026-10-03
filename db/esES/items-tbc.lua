@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["esES-tbc"] = {
   [41] = "OLDRecruit\'s Belt",
   [42] = "OLDSquire\'s Belt",

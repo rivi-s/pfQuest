@@ -96,6 +96,21 @@ SlashCmdList["PFDB"] = function(input, editbox)
     return
   end
 
+  -- argument: backend (read-only startup selection and retained Lua tables)
+  if arg1 == "backend" then
+    local backend = pfQuestBackend or {}
+    local counts = {}
+    for _, kind in ipairs({ "quests", "units", "objects", "items" }) do
+      local count = 0
+      for _ in pairs(pfDB[kind].data or {}) do count = count + 1 end
+      table.insert(counts, kind .. "=" .. count)
+    end
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpfQuest|r backend=" .. tostring(backend.mode or "legacy")
+      .. " native=" .. tostring(pfDatabase:IsHDBEnabled()) .. " " .. tostring(backend.reason or ""))
+    DEFAULT_CHAT_FRAME:AddMessage("Lua records: " .. table.concat(counts, ", "))
+    return
+  end
+
   -- argument: abandontrace
   if arg1 == "abandontrace" then
     DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpf|cffffffffQuest abandon trace:")

@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["ruRU-tbc"] = {
   [17] = "Гнев Мартина",
   [41] = "OLDRecruit\'s Belt",

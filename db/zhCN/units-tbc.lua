@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["zhCN-tbc"] = {
   [2] = "_",
   [25] = "秘银机械幼龙",

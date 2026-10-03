@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["units"]["ruRU-tbc"] = {
   [2] = "_",
   [25] = "Мифриловый механический дракончик",

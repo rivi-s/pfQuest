@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["quests"]["enUS-tbc"] = {
   [17] = {
     ["D"] = "I\'ve heard about a newly discovered plant called the magenta fungus caps.  They grow in clusters at the Uldaman dig site and can be found in the early tunnels and deep within the less-explored areas.  I want to study their potential use in alchemy, and that\'s where you come in.$B$BFind the magenta cap clusters and bring me a dozen caps.  Be warned, the clusters may spew out poison spores if jostled.$B$BDo this for me, and I\'ll whip up a batch of one of my famous restorative elixirs for you!",

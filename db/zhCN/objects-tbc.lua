@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["objects"]["zhCN-tbc"] = {
   [4] = "营火伤害",
   [38] = "巨龙的遗产",

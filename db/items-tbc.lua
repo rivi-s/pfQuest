@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["data-tbc"] = {
   [25] = {
     ["U"] = {

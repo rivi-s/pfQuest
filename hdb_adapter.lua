@@ -18,6 +18,7 @@ local function RefreshQuestIdentityUI()
 end
 
 local function Enabled()
+  if pfQuestBackend and pfQuestBackend.mode ~= "hdb" then return false end
   return type(HDB_GetVersion) == "function"
     and type(HDB_OpenAddon) == "function"
     and type(HDB_QueryRawAsync) == "function"

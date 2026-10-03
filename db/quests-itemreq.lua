@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["quests-itemreq"]["data"] = {
   [3467] = {
     [-1721] = 0,

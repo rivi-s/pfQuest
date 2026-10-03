@@ -1,3 +1,4 @@
+if pfQuestBackend and pfQuestBackend.mode == "hdb" then return end
 pfDB["items"]["zhCN-tbc"] = {
   [17] = "马丁之怒",
   [47] = "盗贼之鞋",
