@@ -25,7 +25,7 @@ pfQuest.defaultdburl = "https://database.ravencraft.io/?quest="
 -- The Quest Log's Show button should lead to the quest hub when one is
 -- known. Objective spawn density can otherwise send it to a nearby zone
 -- with more creatures, even when the quest begins and ends elsewhere.
-local function GetQuestHubMap(id)
+function pfQuest:GetQuestHubMap(id)
   local quest = pfDB.quests and pfDB.quests.data and pfDB.quests.data[id]
   if not quest then
     return
@@ -107,6 +107,14 @@ function pfQuest:Debug(msg)
   pfQuest.debugwin:Show()
 end
 
+-- Small always-on ring buffer for diagnosing the multi-event abandon path.
+-- It records strings only and performs no map/database work.
+pfQuest.abandonTrace = {}
+function pfQuest:TraceAbandon(msg)
+  table.insert(self.abandonTrace, format("%.3f %s", GetTime(), tostring(msg)))
+  if table.getn(self.abandonTrace) > 24 then table.remove(self.abandonTrace, 1) end
+end
+
 function pfQuest:SortedPairs(t, index, reverse)
   -- collect the keys
   local keys = {}
@@ -143,8 +151,27 @@ end
 pfQuest.queue = {}
 pfQuest.queueCount = 0 -- Track queue size to avoid O(n) tsize() calls
 pfQuest.abandon = ""
+pfQuest.abandonID = nil
+pfQuest.turnedInQuestIDs = {}
 pfQuest.questlog = {}
 pfQuest.questlog_tmp = {}
+
+-- Quest history is keyed by numeric database ID. Older HDB alpha builds could
+-- accidentally record a temporary same-title identity as a string.
+if not next(pfDB.quests.data or {}) then
+  for historyID in pairs(pfQuest_history or {}) do
+    if type(historyID) ~= "number" then pfQuest_history[historyID] = nil end
+  end
+end
+
+local function GetCanonicalQuestTitle(id)
+  if pfDatabase and type(pfDatabase.GetQuestTitleHDB) == "function" then
+    local title = pfDatabase:GetQuestTitleHDB(id)
+    if title then return title end
+  end
+  local locale = id and pfDB and pfDB.quests and pfDB.quests.loc and pfDB.quests.loc[id]
+  return locale and locale.T or nil
+end
 
 -- Helper to add to queue with count tracking
 local function queueAdd(entry)
@@ -181,10 +208,29 @@ pfQuest:SetScript("OnEvent", function()
     -- instant auto turn-ins are not lost when a quest enters and leaves the
     -- log between two legacy QUEST_LOG_UPDATE scans.
     local questid = tonumber(arg1)
+    pfQuest:TraceAbandon("EVENT TURNED_IN id=" .. tostring(questid))
     if questid then
+      pfQuest.turnedInQuestIDs[questid] = true
       pfQuest_history[questid] = { time(), UnitLevel("player") }
       if pfJournal then pfJournal.dirty = true end
     end
+  elseif event == "QUEST_REMOVED" then
+    local questid = tonumber(arg1)
+    pfQuest:TraceAbandon("EVENT REMOVED id=" .. tostring(questid)
+      .. " turned=" .. tostring(questid and pfQuest.turnedInQuestIDs[questid] and true or false))
+    if questid then
+      -- ClassicAPI emits QUEST_TURNED_IN before QUEST_REMOVED for a hand-in.
+      -- An ID removed without that server-authoritative completion event is
+      -- an abandon. This is more reliable on Turtle than the legacy global
+      -- AbandonQuest hook and arrives before our deferred quest-log scan.
+      if not pfQuest.turnedInQuestIDs[questid] then
+        pfQuest.abandonID = questid
+        local active = pfQuest.questlog and pfQuest.questlog[questid]
+        pfQuest.abandon = active and active.title or GetCanonicalQuestTitle(questid) or ""
+      end
+      pfQuest.turnedInQuestIDs[questid] = nil
+    end
+    pfQuest.updateQuestLog = true
   elseif event == "SKILL_LINES_CHANGED" then
     -- Use table.concat to avoid string concatenation garbage
     local skillParts = {}
@@ -199,7 +245,12 @@ pfQuest:SetScript("OnEvent", function()
       pfQuest.updateQuestGivers = true
       skillstate = skills
     end
-  elseif event == "PLAYER_LEVEL_UP" or event == "PLAYER_ENTERING_WORLD" then
+  elseif event == "PLAYER_LEVEL_UP" then
+    pfQuest.updateQuestGivers = true
+  elseif event == "PLAYER_ENTERING_WORLD" then
+    -- The initial QUEST_LOG_UPDATE can arrive while login is locked. Queue a
+    -- complete post-login scan so active hand-in nodes are rebuilt reliably.
+    pfQuest.updateQuestLog = true
     pfQuest.updateQuestGivers = true
   else
     pfQuest.updateQuestLog = true
@@ -278,7 +329,9 @@ pfQuest:SetScript("OnUpdate", function()
     if pfQuest_config["welcome"] == "1" and pfQuest_config["trackingmethod"] ~= 4 and pfQuest_config["allquestgivers"] == "1" then
       local meta = { ["addon"] = "PFQUEST" }
       local t0 = GetTime()
-      pfDatabase:SearchQuests(meta)
+      if not pfDatabase:SearchQuestGiversHDB(meta) then
+        pfDatabase:SearchQuests(meta)
+      end
       pfQuest:Debug(format("|cffff3333TIMER SearchQuests: %.4fs", GetTime() - t0))
     end
     this.updateQuestGivers = false
@@ -297,13 +350,17 @@ pfQuest:SetScript("OnUpdate", function()
       -- AddNode merges matching coordinates, while deleting here could erase
       -- a valid objective set when the delayed payload is still incomplete.
       -- Regular RELOAD events retain the full delete-and-rebuild behavior.
-      local retryMaps = pfDatabase:SearchQuestID(retry.questid, { ["addon"] = "PFQUEST", ["qlogid"] = retry.qlogid })
+      local retryMeta = { ["addon"] = "PFQUEST", ["qlogid"] = retry.qlogid }
+      local usedHDB = pfDatabase:SearchQuestIDHDB(retry.questid, retryMeta)
+      local retryMaps = usedHDB and nil or pfDatabase:SearchQuestID(retry.questid, retryMeta)
       -- Current Zone Only normally receives entries while UpdateNodes walks
       -- rendered pins. Confirm the quest is truly in the log before adding a
       -- same-zone fallback for item/object objectives.
-      if tonumber(pfQuest_config["trackingmethod"]) == 5 and retryMaps then
+      if tonumber(pfQuest_config["trackingmethod"]) == 5 then
         local currentMap = pfMap:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
-        if currentMap and retryMaps[currentMap] then
+        local hasCurrentMap = usedHDB and pfDatabase:QuestHDBHasMapPin(retry.questid, retry.qlogid, currentMap)
+          or (retryMaps and retryMaps[currentMap])
+        if currentMap and hasCurrentMap then
           -- UpdateNodes rebuilds Current Zone Only from its visible pins. Keep
           -- confirmed item/object quests that belong to this map in a small
           -- map-scoped cache so that rebuild cannot immediately clear them.
@@ -325,7 +382,10 @@ pfQuest:SetScript("OnUpdate", function()
     if tonumber(pfQuest_config["trackingmethod"]) == 5 then
       for questid, data in pairs(pfQuest.questlog) do
         if type(questid) == "number" and data.qlogid then
-          pfDatabase:SearchQuestID(questid, { ["addon"] = "PFQUEST", ["qlogid"] = data.qlogid })
+          local refreshMeta = { ["addon"] = "PFQUEST", ["qlogid"] = data.qlogid }
+          if not pfDatabase:SearchQuestIDHDB(questid, refreshMeta) then
+            pfDatabase:SearchQuestID(questid, refreshMeta)
+          end
         end
       end
       pfMap.queue_update = GetTime()
@@ -338,21 +398,53 @@ pfQuest:SetScript("OnUpdate", function()
 
   -- process queue
   for id, entry in pairs(this.queue) do
-    -- questgivers only need refreshing when quests are added or removed,
-    -- not when objectives change (RELOAD). track this before clearing the entry.
-    if entry[4] == "NEW" or entry[4] == "REMOVE" then
-      this.needsQuestGiverUpdate = true
+    -- HDB can update one accepted quest from its cached starter set. The Lua
+    -- fallback still needs the established complete refresh.
+    if entry[4] == "NEW" then
+      if not (type(pfDatabase.MarkQuestAcceptedHDB) == "function"
+        and pfDatabase:MarkQuestAcceptedHDB(entry[2])) then
+        this.needsQuestGiverUpdate = true
+      end
+    end
+
+    -- Async same-title resolution first indexes a log entry by its visible
+    -- title, then replaces that temporary key with the numeric quest ID. The
+    -- old key appears in the queue as REMOVE even though the quest is still
+    -- active. Do not let that bookkeeping transition erase nodes just rendered
+    -- for the resolved ID (both entries deliberately share the same title).
+    local identityRekey = false
+    if entry[4] == "REMOVE" and type(entry[2]) == "string" then
+      for activeID, active in pairs(pfQuest.questlog or {}) do
+        if type(activeID) == "number" and active and active.title == entry[1] then
+          identityRekey = true
+          break
+        end
+      end
     end
 
     -- remove quest
-    if entry[4] == "REMOVE" then
+    if identityRekey then
+      pfQuest:Debug("HearthDB resolved quest identity: " .. entry[1])
+    elseif entry[4] == "REMOVE" then
+      local canonicalTitle = GetCanonicalQuestTitle(entry[2])
+      local abandoned = entry[1] == pfQuest.abandon
+        or (pfQuest.abandonID and tonumber(entry[2]) == pfQuest.abandonID)
+      if abandoned then pfQuest.abandonTraceQuestID = tonumber(entry[2]) end
+      pfQuest:TraceAbandon("QUEUE REMOVE id=" .. tostring(entry[2])
+        .. " abandoned=" .. tostring(abandoned and true or false)
+        .. " hookID=" .. tostring(pfQuest.abandonID)
+        .. " hookTitle=" .. tostring(pfQuest.abandon))
+      pfDatabase:ClearQuestHDBCache(entry[2])
       pfQuest:Debug("|cffff5555Remove Quest: " .. entry[1] .. " (" .. entry[2] .. ")")
 
       -- write pfQuest.questlog history
-      local abandoned = entry[1] == pfQuest.abandon
       if abandoned then
         pfQuest_history[entry[2]] = nil
-      else
+      elseif not (pfQuestCompat.optional and pfQuestCompat.optional.questEvents) then
+        -- Legacy clients expose only a generic log removal, so completion must
+        -- still be inferred there. Enhanced clients report QUEST_TURNED_IN with
+        -- the exact numeric ID above; do not let an unrelated removal or a
+        -- missed abandon marker create a false completion on those clients.
         pfQuest_history[entry[2]] = { time(), UnitLevel("player") }
       end
       -- Mark journal dirty when history changes
@@ -366,20 +458,28 @@ pfQuest:SetScript("OnUpdate", function()
         pfMap:DeleteNode("PFQUEST", entry[1])
 
         -- also delete nodes by quest ids for servers with different names
-        if entry[2] and pfDB["quests"]["loc"][entry[2]] and pfDB["quests"]["loc"][entry[2]].T then
-          pfMap:DeleteNode("PFQUEST", pfDB["quests"]["loc"][entry[2]].T)
-        end
+        if canonicalTitle then pfMap:DeleteNode("PFQUEST", canonicalTitle) end
         pfQuest:Debug(format("|cffffff00TIMER DeleteNode(REMOVE): %.4fs", GetTime() - t0))
       end
 
-      -- Multiple quests can leave the log in one unordered queue batch. An
-      -- unrelated removal must not consume the identity of the quest the
-      -- player explicitly abandoned.
-      if abandoned then pfQuest.abandon = "" end
+      if abandoned and type(pfDatabase.RestoreAbandonedQuestGiverHDB) == "function"
+        and pfDatabase:RestoreAbandonedQuestGiverHDB(entry[2], { addon = "PFQUEST" }) then
+        -- The single cached quest was restored without scanning every giver.
+      elseif not abandoned and type(pfDatabase.RefreshCompletedQuestGiversHDB) == "function"
+        and pfDatabase:RefreshCompletedQuestGiversHDB(entry[2], { addon = "PFQUEST" }) then
+        -- Only direct follow-ups can become newly eligible after this turn-in.
+      else
+        -- Keep the complete eligibility refresh as the compatibility fallback.
+        this.needsQuestGiverUpdate = true
+      end
+      -- A quest-log update can remove multiple entries in one unordered batch.
+      -- Preserve the abandon identity across unrelated removals and consume it
+      -- only after the matching quest has taken the abandon restoration path.
+      if abandoned then
+        pfQuest.abandon = ""
+        pfQuest.abandonID = nil
+      end
     elseif entry[4] == "REINDEX" then
-      -- Accepting one quest can shift the Quest Log index of every quest
-      -- below it. The quest data itself has not changed, so patch the
-      -- cached qlogid on existing map nodes instead of a full delete/rebuild.
       pfQuest:Debug("Reindex Quest: " .. entry[1] .. " (" .. entry[2] .. ")")
       if pfMap and pfMap.nodes and pfMap.nodes.PFQUEST then
         for _, coordinates in pairs(pfMap.nodes.PFQUEST) do
@@ -391,6 +491,9 @@ pfQuest:SetScript("OnUpdate", function()
             end
           end
         end
+      end
+      if pfDatabase and pfDatabase.ReindexQuestHDBCache then
+        pfDatabase:ReindexQuestHDBCache(entry[2], entry[3])
       end
       pfMap.queue_update = GetTime()
     else
@@ -407,9 +510,8 @@ pfQuest:SetScript("OnUpdate", function()
         pfMap:DeleteNode("PFQUEST", entry[1])
 
         -- delete nodes by quest ids for servers with different names
-        if entry[2] and pfDB["quests"]["loc"][entry[2]] and pfDB["quests"]["loc"][entry[2]].T then
-          pfMap:DeleteNode("PFQUEST", pfDB["quests"]["loc"][entry[2]].T)
-        end
+        local canonicalTitle = GetCanonicalQuestTitle(entry[2])
+        if canonicalTitle then pfMap:DeleteNode("PFQUEST", canonicalTitle) end
         pfQuest:Debug(format("|cffffff00TIMER DeleteNode(NEW/RELOAD): %.4fs", GetTime() - t0))
 
         -- skip quest objective detection on manual and tracked mode
@@ -419,7 +521,11 @@ pfQuest:SetScript("OnUpdate", function()
         then
           local meta = { ["addon"] = "PFQUEST", ["qlogid"] = entry[3] }
           local t1 = GetTime()
-          pfDatabase:SearchQuestID(entry[2], meta)
+          -- HearthDB owns active-quest map nodes when enabled. A failed or
+          -- unavailable native query immediately falls back to normal pfQuest.
+          if not pfDatabase:SearchQuestIDHDB(entry[2], meta) then
+            pfDatabase:SearchQuestID(entry[2], meta)
+          end
           -- SearchQuestID marks map nodes dirty, but does not itself request a
           -- render. Queue one after the quest batch settles so the tracker
           -- receives newly found same-zone objectives immediately.
@@ -455,6 +561,34 @@ pfQuest:SetScript("OnUpdate", function()
       this.updateQuestGivers = true
       this.needsQuestGiverUpdate = false
     end
+
+    -- An abandoned quest can shift several Quest Log rows, producing REMOVE
+    -- plus multiple REINDEX entries. Wait until that complete batch has been
+    -- applied, then perform one synchronous tracker/route/minimap rebuild from
+    -- the restored cached starter instead of showing several staggered states.
+    if this.immediateAbandonRefresh then
+      this:TraceAbandon("QUEUE settled: immediate redraw")
+      this.immediateAbandonRefresh = nil
+      pfMap.queue_update = nil
+      pfMap.xPlayer = nil
+      pfMap.minimapTick = nil
+      pfMap:UpdateNodes()
+      pfMap:UpdateMinimap()
+      local traceID = this.abandonTraceQuestID
+      local stored, shown = 0, 0
+      for _, maps in pairs((pfMap.nodes and pfMap.nodes.PFQUEST) or {}) do
+        for _, titles in pairs(maps) do
+          for _, node in pairs(titles) do
+            if tonumber(node.questid) == traceID then stored = stored + 1 end
+          end
+        end
+      end
+      for _, pin in pairs(pfMap.mpins or {}) do
+        if pin:IsShown() and tonumber(pin.questid) == traceID then shown = shown + 1 end
+      end
+      this:TraceAbandon("REDRAW id=" .. tostring(traceID)
+        .. " stored=" .. stored .. " minimapShown=" .. shown)
+    end
   end
 end)
 
@@ -478,8 +612,26 @@ function pfQuest:UpdateQuestlog()
       -- Quest Log is open, keep background refreshes read-only so collapsed
       -- categories remain collapsed through progress and completion updates.
       local preserveSelection = QuestLogFrame and QuestLogFrame:IsShown()
-      questid = pfDatabase:GetQuestIDs(qlogid, preserveSelection)
-      questid = questid and tonumber(questid[1]) or title
+      local resolved = pfDatabase:GetQuestIDs(qlogid, preserveSelection)
+      questid = resolved and tonumber(resolved[1])
+      if not questid then
+        -- Removing a quest shifts every row below it. HDB title resolution can
+        -- be pending for one scan during that transition; replacing an
+        -- existing numeric key with the title would emit a false REMOVE and
+        -- delete that quest's completed minimap marker. Reuse the prior ID
+        -- only when the active title identifies exactly one numeric quest.
+        local priorID
+        for activeID, active in pairs(pfQuest.questlog) do
+          if type(activeID) == "number" and active and active.title == title then
+            if priorID then
+              priorID = nil
+              break
+            end
+            priorID = activeID
+          end
+        end
+        questid = priorID or title
+      end
       watched = IsQuestWatched(qlogid)
 
       -- build state string using table.concat (avoid string concat garbage)
@@ -489,7 +641,7 @@ function pfQuest:UpdateQuestlog()
       local stateParts = { watched and "track" or "", complete and "complete" or "incomplete" }
       if objectives then
         for i = 1, objectives, 1 do
-          local text, _, done = GetQuestLogLeaderBoard(i, qlogid)
+          local text, _, done = compat.GetQuestLogLeaderBoard(i, qlogid)
           stateParts[getn(stateParts) + 1] = i
           stateParts[getn(stateParts) + 1] = text or ""
           stateParts[getn(stateParts) + 1] = done and "done" or "todo"
@@ -561,6 +713,7 @@ end
 function pfQuest:ResetAll()
   -- force reload all quests
   pfMap:DeleteNode("PFQUEST")
+  if pfDatabase and pfDatabase.ClearHDBQuestGiverCache then pfDatabase:ClearHDBQuestGiverCache() end
   pfQuest.questlog = {}
   pfQuest.updateQuestLog = true
   pfQuest.updateQuestGivers = true
@@ -708,6 +861,32 @@ function pfQuest:AddQuestLogIntegration()
     ToggleDropDownMenu(1, nil, self, "cursor", 3, -3)
   end)
 
+  local hdbQuestLogText = {}
+  local hdbQuestLogPending = {}
+  local hdbQuestLogFailed = {}
+  local function ApplyQuestLogText(record)
+    if not record then return end
+    local QuestLogQuestTitle = EQL3_QuestLogQuestTitle or pfQuestCompat.QuestLogQuestTitle
+    local QuestLogObjectivesText = EQL3_QuestLogObjectivesText or pfQuestCompat.QuestLogObjectivesText
+    local QuestLogQuestDescription = EQL3_QuestLogQuestDescription or pfQuestCompat.QuestLogQuestDescription
+    local QuestLogDetailScrollFrame = EQL3_QuestLogDetailScrollFrame or QuestLogDetailScrollFrame
+
+    QuestLogQuestTitle:SetText(pfDatabase:FormatQuestText(record.title or ""))
+    QuestLogObjectivesText:SetText(pfDatabase:FormatQuestText(record.objective or ""))
+    QuestLogQuestDescription:SetText(pfDatabase:FormatQuestText(record.description or ""))
+    QuestLogDetailScrollFrame:UpdateScrollChildRect()
+  end
+
+  local function ApplyLuaQuestLogText(id, lang)
+    local texts = id and pfDB["quests"][lang] and pfDB["quests"][lang][id]
+    if not texts then return end
+    ApplyQuestLogText({
+      title = texts["T"],
+      objective = texts["O"],
+      description = texts["D"],
+    })
+  end
+
   pfQuest.buttonLanguage:SetScript("OnUpdate", function()
     -- The controls live on UIParent so they can sit in pfUI's header. Never
     -- leave them behind if another addon closes the Quest Log without hiding
@@ -733,17 +912,34 @@ function pfQuest:AddQuestLogIntegration()
       return
     end
 
-    if id and pfDB["quests"][lang] and pfDB["quests"][lang][id] then
-      local QuestLogQuestTitle = EQL3_QuestLogQuestTitle or pfQuestCompat.QuestLogQuestTitle
-      local QuestLogObjectivesText = EQL3_QuestLogObjectivesText or pfQuestCompat.QuestLogObjectivesText
-      local QuestLogQuestDescription = EQL3_QuestLogQuestDescription or pfQuestCompat.QuestLogQuestDescription
-      local QuestLogDetailScrollFrame = EQL3_QuestLogDetailScrollFrame or QuestLogDetailScrollFrame
-
-      QuestLogQuestTitle:SetText(pfDatabase:FormatQuestText(pfDB["quests"][lang][id]["T"]))
-      QuestLogObjectivesText:SetText(pfDatabase:FormatQuestText(pfDB["quests"][lang][id]["O"]))
-      QuestLogQuestDescription:SetText(pfDatabase:FormatQuestText(pfDB["quests"][lang][id]["D"]))
-      QuestLogDetailScrollFrame:UpdateScrollChildRect()
+    if id and lang == "enUS" and type(pfDatabase.GetQuestTextHDB) == "function" then
+      if hdbQuestLogText[id] then
+        ApplyQuestLogText(hdbQuestLogText[id])
+        return
+      elseif not hdbQuestLogPending[id] and not hdbQuestLogFailed[id] then
+        hdbQuestLogPending[id] = true
+        local selectedID, selectedLang = id, lang
+        local accepted = pfDatabase:GetQuestTextHDB(id, function(record, err)
+          hdbQuestLogPending[selectedID] = nil
+          if record then
+            hdbQuestLogText[selectedID] = record
+            if QuestLogFrame:IsShown() and pfQuest.buttonOnline:GetID() == selectedID
+              and pfQuest_config.translate == selectedLang then
+              ApplyQuestLogText(record)
+            end
+          else
+            hdbQuestLogFailed[selectedID] = true
+          end
+        end)
+        if accepted then return end
+        hdbQuestLogPending[id] = nil
+        hdbQuestLogFailed[id] = true
+      end
     end
+
+    -- Non-English translations and unavailable native records retain the
+    -- established Lua localization path.
+    ApplyLuaQuestLogText(id, lang)
   end)
 
   -- pfUI finishes its Quest Log layout during OnShow. Refresh afterwards so
@@ -779,7 +975,7 @@ function pfQuest:AddQuestLogIntegration()
   pfQuest.buttonShow:SetText(pfQuest_Loc["Show"])
   pfQuest.buttonShow:SetPoint("TOP", dockTitle, "TOP", -110, 0)
   pfQuest.buttonShow:SetScript("OnClick", function()
-    local questIndex = GetQuestLogSelection()
+    local questIndex = compat.GetQuestLogSelection()
     local questids = pfDatabase:GetQuestIDs(questIndex)
     local title, _, _, header, _, complete = compat.GetQuestLogTitle(questIndex)
     local id = questids and tonumber(questids[1])
@@ -788,8 +984,22 @@ function pfQuest:AddQuestLogIntegration()
     end
 
     local maps, meta = {}, { ["addon"] = "PFQUEST", ["qlogid"] = questIndex }
+    if type(pfDatabase.SearchQuestIDHDB) == "function" and pfDatabase:SearchQuestIDHDB(id, meta) then
+      -- Native quest rows can exist without a matching entry in the legacy
+      -- Lua table. Wait for the HDB start/end hub lookup before opening the
+      -- map; static data remains the fallback for non-HDB or incomplete rows.
+      local fallbackMap = pfQuest:GetQuestHubMap(id)
+      if type(pfDatabase.GetQuestHubMapHDB) == "function"
+        and pfDatabase:GetQuestHubMapHDB(id, function(hubMap)
+          pfMap:ShowMapID(hubMap or fallbackMap)
+        end) then
+        return
+      end
+      pfMap:ShowMapID(fallbackMap)
+      return
+    end
     maps = pfDatabase:SearchQuestID(id, meta, maps)
-    pfMap:ShowMapID(GetQuestHubMap(id) or pfDatabase:GetBestMap(maps))
+    pfMap:ShowMapID(pfQuest:GetQuestHubMap(id) or pfDatabase:GetBestMap(maps))
   end)
 
   pfQuest.buttonHide = pfQuest.buttonHide or CreateFrame("Button", "pfQuestHide", dockFrame, "UIPanelButtonTemplate")
@@ -798,7 +1008,7 @@ function pfQuest:AddQuestLogIntegration()
   pfQuest.buttonHide:SetText(pfQuest_Loc["Hide"])
   pfQuest.buttonHide:SetPoint("TOP", dockTitle, "TOP", -37, 0)
   pfQuest.buttonHide:SetScript("OnClick", function()
-    local questIndex = GetQuestLogSelection()
+    local questIndex = compat.GetQuestLogSelection()
     local title, _, _, header, _, complete = compat.GetQuestLogTitle(questIndex)
     if header then
       return
@@ -1192,6 +1402,16 @@ end
 local HookAbandonQuest = AbandonQuest
 AbandonQuest = function()
   pfQuest.abandon = GetAbandonQuestName()
+  pfQuest.abandonID = nil
+  local selected = compat.GetQuestLogSelection()
+  for questID, state in pairs(pfQuest.questlog or {}) do
+    if type(questID) == "number" and state and state.qlogid == selected then
+      pfQuest.abandonID = questID
+      break
+    end
+  end
+  pfQuest:TraceAbandon("HOOK AbandonQuest id=" .. tostring(pfQuest.abandonID)
+    .. " title=" .. tostring(pfQuest.abandon))
   HookAbandonQuest()
 end
 
@@ -1229,9 +1449,27 @@ QuestLog_Update = function()
     -- button refresh read-only so resolving an ambiguous quest cannot select a
     -- hidden row and expand its collapsed category.
     local preserveSelection = QuestLogFrame and QuestLogFrame:IsShown()
-    local questids = pfDatabase:GetQuestIDs(GetQuestLogSelection(), preserveSelection)
-    if questids and questids[1] and tonumber(questids[1]) and pfQuest.questlog[questids[1]] then
-      pfQuest.buttonOnline:SetID(questids[1])
+    local selectedQlogID = compat.GetQuestLogSelection()
+    local questids = pfDatabase:GetQuestIDs(selectedQlogID, preserveSelection)
+    local resolvedQuestID = questids and tonumber(questids[1])
+    local selectedQuestIsActive
+    if resolvedQuestID then
+      local resolvedState = pfQuest.questlog and pfQuest.questlog[resolvedQuestID]
+      selectedQuestIsActive = resolvedState and resolvedState.qlogid == selectedQlogID
+      if not selectedQuestIsActive then
+        -- Duplicate-title HDB resolution is asynchronous. The selected row can
+        -- resolve one refresh before UpdateQuestlog rekeys its title entry to
+        -- the numeric ID. The qlog index still proves this is the active row.
+        for _, state in pairs(pfQuest.questlog or {}) do
+          if state and state.qlogid == selectedQlogID then
+            selectedQuestIsActive = true
+            break
+          end
+        end
+      end
+    end
+    if resolvedQuestID and selectedQuestIsActive then
+      pfQuest.buttonOnline:SetID(resolvedQuestID)
       pfQuest.buttonOnline:Show()
       pfQuest.buttonLanguage:Show()
       -- enable buttons
@@ -1239,7 +1477,7 @@ QuestLog_Update = function()
       if pfQuest.buttonHide then pfQuest.buttonHide:Enable() end
 
       if pfQuest_config.showids == "1" then
-        pfQuest.buttonOnline.txt:SetText("|cff000000[|cffaa2222id: " .. questids[1] .. "|cff000000]")
+        pfQuest.buttonOnline.txt:SetText("|cff000000[|cffaa2222id: " .. resolvedQuestID .. "|cff000000]")
         pfQuest.buttonOnline:SetWidth(pfQuest.buttonOnline.txt:GetStringWidth())
       end
     else
@@ -1274,7 +1512,7 @@ if not GetQuestLink then -- Allow to send questlinks from questlog
     local questid = questids and tonumber(questids[1]) or 0
 
     if IsShiftKeyDown() and not this.isHeader and ChatFrameEditBox:IsVisible() then
-      pfQuestCompat.InsertQuestLink(questid, questName)
+      pfQuestCompat.InsertQuestLink(questid, questName, questLevel)
       QuestLog_SetSelection(questIndex)
       QuestLog_Update()
       return
@@ -1285,6 +1523,74 @@ if not GetQuestLink then -- Allow to send questlinks from questlog
 
   -- Patch ItemRef to display Questlinks
   local pfQuestHookSetItemRef = SetItemRef
+  local function DrawQuestLinkTooltip(id, questTitle, hasTitle, record)
+    ItemRefTooltip:ClearLines()
+
+    local title = record and record.title or questTitle
+    local questlevel = record and tonumber(record.level)
+    if title then
+      local color = questlevel and pfQuestCompat.GetDifficultyColor(questlevel) or { r = 1, g = 1, b = 0 }
+      ItemRefTooltip:AddLine(title, color.r, color.g, color.b)
+    elseif hasTitle then
+      ItemRefTooltip:AddLine(questTitle, 1, 1, 0)
+    end
+
+    local queststate = pfQuest_history[id] and 2 or 0
+    queststate = pfQuest.questlog[id] and 1 or queststate
+    if queststate == 0 then
+      ItemRefTooltip:AddLine(pfQuest_Loc["You don't have this quest."] .. "\n\n", 1, 0.5, 0.5)
+    elseif queststate == 1 then
+      ItemRefTooltip:AddLine(pfQuest_Loc["You are on this quest."] .. "\n\n", 1, 1, 0.5)
+    elseif queststate == 2 then
+      ItemRefTooltip:AddLine(pfQuest_Loc["You already did this quest."] .. "\n\n", 0.5, 1, 0.5)
+    end
+
+    local objective = record and record.objective
+    local description = record and record.description
+    if objective and objective ~= "" then
+      ItemRefTooltip:AddLine(pfDatabase:FormatQuestText(objective), 1, 1, 1, true)
+    end
+    if objective and objective ~= "" and description and description ~= "" then
+      ItemRefTooltip:AddLine(" ", 0, 0, 0)
+    end
+    if description and description ~= "" then
+      ItemRefTooltip:AddLine(pfDatabase:FormatQuestText(description), 0.8, 0.8, 0.8, true)
+    end
+
+    local minlevel = record and tonumber(record.minLevel)
+    if questlevel or minlevel then ItemRefTooltip:AddLine(" ", 0, 0, 0) end
+    if minlevel then
+      local color = pfQuestCompat.GetDifficultyColor(minlevel)
+      ItemRefTooltip:AddLine(
+        "|cffffffff" .. pfQuest_Loc["Required Level"] .. ": |r" .. minlevel,
+        color.r,
+        color.g,
+        color.b
+      )
+    end
+    if questlevel then
+      local color = pfQuestCompat.GetDifficultyColor(questlevel)
+      ItemRefTooltip:AddLine(
+        "|cffffffff" .. pfQuest_Loc["Quest Level"] .. ": |r" .. questlevel,
+        color.r,
+        color.g,
+        color.b
+      )
+    end
+
+    ItemRefTooltip:Show()
+  end
+
+  local function GetLuaQuestLinkRecord(id)
+    local texts = id and pfDB["quests"]["loc"][id]
+    local data = id and pfDB["quests"]["data"][id]
+    if not texts then return nil end
+    return {
+      title = texts["T"], objective = texts["O"], description = texts["D"],
+      level = data and data["lvl"], minLevel = data and data["min"],
+    }
+  end
+
   SetItemRef = function(link, text, button)
     local isQuest, _, id = string.find(link, "quest:(%d+):.*")
     local isQuest2, _, _ = string.find(link, "quest2:.*")
@@ -1303,11 +1609,44 @@ if not GetQuestLink then -- Allow to send questlinks from questlog
       ShowUIPanel(ItemRefTooltip)
       ItemRefTooltip:SetOwner(UIParent, "ANCHOR_PRESERVE")
 
-      local hasTitle, _, questTitle = string.find(text, ".*|h%[(.*)%]|h.*")
+      local _, _, questTitle = string.find(text or "", "%[([^%]]+)%]")
+      if (not questTitle or questTitle == "") and isQuest2 then
+        local _, _, linkedTitle = string.find(link or "", "^quest2:(.+)$")
+        questTitle = linkedTitle
+      end
+      local hasTitle = questTitle and questTitle ~= ""
 
       id = tonumber(id)
+      ItemRefTooltip.pfQtext = text
+
+      local function LoadHDBQuestLink(resolvedID)
+        if not resolvedID or resolvedID <= 0 or type(pfDatabase.GetQuestTextHDB) ~= "function" then return false end
+        ItemRefTooltip:ClearLines()
+        if hasTitle then ItemRefTooltip:AddLine(questTitle, 1, 1, 0) end
+        ItemRefTooltip:Show()
+        local requestedText = text
+        local accepted = pfDatabase:GetQuestTextHDB(resolvedID, function(record, err)
+          if not ItemRefTooltip:IsShown() or ItemRefTooltip.pfQtext ~= requestedText then return end
+          DrawQuestLinkTooltip(resolvedID, questTitle, hasTitle, record or GetLuaQuestLinkRecord(resolvedID))
+        end)
+        return accepted and true or false
+      end
 
       if not id or id == 0 then
+        if questTitle and type(pfDatabase.GetQuestTextByTitleHDB) == "function" then
+          local requestedText = text
+          local accepted = pfDatabase:GetQuestTextByTitleHDB(questTitle, function(record, err)
+            if not ItemRefTooltip:IsShown() or ItemRefTooltip.pfQtext ~= requestedText then return end
+            local resolvedID = record and tonumber(record.id)
+            DrawQuestLinkTooltip(resolvedID, questTitle, hasTitle, record or GetLuaQuestLinkRecord(resolvedID))
+          end)
+          if accepted then
+            ItemRefTooltip:ClearLines()
+            if hasTitle then ItemRefTooltip:AddLine(questTitle, 1, 1, 0) end
+            ItemRefTooltip:Show()
+            return
+          end
+        end
         for scanID, data in pairs(pfDB["quests"]["loc"]) do
           if data.T == questTitle then
             id = scanID
@@ -1316,69 +1655,9 @@ if not GetQuestLink then -- Allow to send questlinks from questlog
         end
       end
 
-      -- read and set title
-      if id and id > 0 and pfDB["quests"]["loc"][id] then
-        local questlevel = tonumber(pfDB["quests"]["data"][id]["lvl"])
-        local color = pfQuestCompat.GetDifficultyColor(questlevel)
-        ItemRefTooltip:AddLine(pfDB["quests"]["loc"][id].T, color.r, color.g, color.b)
-      elseif hasTitle then
-        ItemRefTooltip:AddLine(questTitle, 1, 1, 0)
-      end
+      if LoadHDBQuestLink(id) then return end
 
-      -- scan for active quests
-      local queststate = pfQuest_history[id] and 2 or 0
-      queststate = pfQuest.questlog[id] and 1 or queststate
-
-      if queststate == 0 then
-        ItemRefTooltip:AddLine(pfQuest_Loc["You don't have this quest."] .. "\n\n", 1, 0.5, 0.5)
-      elseif queststate == 1 then
-        ItemRefTooltip:AddLine(pfQuest_Loc["You are on this quest."] .. "\n\n", 1, 1, 0.5)
-      elseif queststate == 2 then
-        ItemRefTooltip:AddLine(pfQuest_Loc["You already did this quest."] .. "\n\n", 0.5, 1, 0.5)
-      end
-
-      -- add database entries if existing
-      if pfDB["quests"]["loc"][id] then
-        if pfDB["quests"]["loc"][id]["O"] then
-          ItemRefTooltip:AddLine(pfDatabase:FormatQuestText(pfDB["quests"]["loc"][id]["O"]), 1, 1, 1, true)
-        end
-
-        if pfDB["quests"]["loc"][id]["O"] and pfDB["quests"]["loc"][id]["D"] then
-          ItemRefTooltip:AddLine(" ", 0, 0, 0)
-        end
-
-        if pfDB["quests"]["loc"][id]["D"] then
-          ItemRefTooltip:AddLine(pfDatabase:FormatQuestText(pfDB["quests"]["loc"][id]["D"]), 0.8, 0.8, 0.8, true)
-        end
-
-        if pfDB["quests"]["data"][id]["lvl"] or pfDB["quests"]["data"][id]["min"] then
-          ItemRefTooltip:AddLine(" ", 0, 0, 0)
-        end
-
-        if pfDB["quests"]["data"][id]["min"] then
-          local questlevel = tonumber(pfDB["quests"]["data"][id]["min"])
-          local color = pfQuestCompat.GetDifficultyColor(questlevel)
-          ItemRefTooltip:AddLine(
-            "|cffffffff" .. pfQuest_Loc["Required Level"] .. ": |r" .. questlevel,
-            color.r,
-            color.g,
-            color.b
-          )
-        end
-
-        if pfDB["quests"]["data"][id]["lvl"] then
-          local questlevel = tonumber(pfDB["quests"]["data"][id]["lvl"])
-          local color = pfQuestCompat.GetDifficultyColor(questlevel)
-          ItemRefTooltip:AddLine(
-            "|cffffffff" .. pfQuest_Loc["Quest Level"] .. ": |r" .. questlevel,
-            color.r,
-            color.g,
-            color.b
-          )
-        end
-      end
-
-      ItemRefTooltip:Show()
+      DrawQuestLinkTooltip(id, questTitle, hasTitle, GetLuaQuestLinkRecord(id))
     else
       pfQuestHookSetItemRef(link, text, button)
     end

@@ -9,6 +9,7 @@
   <Include file="..\database.lua" />
   <Include file="..\icons.lua" />
   <Include file="..\map.lua" />
+  <Include file="..\hdb_adapter.lua" />
   <Include file="..\quest.lua" />
   <Include file="..\route.lua" />
   <Include file="..\tracker.lua" />

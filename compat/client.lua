@@ -14,6 +14,11 @@ pfQuestCompat.client = client
 
 -- addon-compat: use and cache the original function if CTMod overwrites global API calls
 local GetQuestLogTitle = CT_QuestLevels_oldGetQuestLogTitle or GetQuestLogTitle
+local NativeGetQuestLogQuestText = GetQuestLogQuestText
+local NativeGetQuestLogLeaderBoard = GetQuestLogLeaderBoard
+local NativeGetQuestLogSelection = GetQuestLogSelection
+local NativeSelectQuestLogEntry = SelectQuestLogEntry
+local NativeGetQuestLinkForLogIndex = GetQuestLink or GetQuestLinkForLogIndex
 
 -- tbc+wotlk: change behaviour of later expansions to the vanilla one
 pfQuestCompat.GetQuestLogTitle = function(id)
@@ -25,6 +30,30 @@ pfQuestCompat.GetQuestLogTitle = function(id)
   end
 
   return title, level, tag, header, collapsed, complete
+end
+
+-- Keep quest-log access behind one client boundary. Enhanced Vanilla clients
+-- may supply a direct quest-link API; stock clients simply expose no fast path.
+pfQuestCompat.GetQuestLogQuestText = function()
+  return NativeGetQuestLogQuestText()
+end
+
+pfQuestCompat.GetQuestLogLeaderBoard = function(index, questLogIndex)
+  return NativeGetQuestLogLeaderBoard(index, questLogIndex)
+end
+
+pfQuestCompat.GetQuestLogSelection = function()
+  return NativeGetQuestLogSelection()
+end
+
+pfQuestCompat.SelectQuestLogEntry = function(index)
+  return NativeSelectQuestLogEntry(index)
+end
+
+if NativeGetQuestLinkForLogIndex then
+  pfQuestCompat.GetQuestLinkForLogIndex = function(index)
+    return NativeGetQuestLinkForLogIndex(index)
+  end
 end
 
 -- wotlk: changed from GetDifficultyColor to GetQuestDifficultyColor in 3.2
@@ -45,11 +74,13 @@ if client >= 30300 then
 end
 
 -- vanilla+tbc+wotlk: base function to insert quest links to the chat
-pfQuestCompat.InsertQuestLink = function(questid, name)
+pfQuestCompat.InsertQuestLink = function(questid, name, knownLevel)
   local questid = tonumber(questid) or 0
   local fallback = name or UNKNOWN
-  local level = pfDB["quests"]["data"][questid] and pfDB["quests"]["data"][questid]["lvl"] or 0
-  local name = pfDB["quests"]["loc"][questid] and pfDB["quests"]["loc"][questid]["T"] or fallback
+  local level = knownLevel
+    or (pfDB["quests"]["data"][questid] and pfDB["quests"]["data"][questid]["lvl"])
+    or 0
+  local name = name or (pfDB["quests"]["loc"][questid] and pfDB["quests"]["loc"][questid]["T"]) or fallback
   local hex = pfUI.api.rgbhex(pfQuestCompat.GetDifficultyColor(level))
 
   ChatFrameEditBox:Show()

@@ -200,11 +200,9 @@ pfQuest.route.AddPoint = function(self, tbl)
   self.recalculate = true
 end
 
--- A party-quest pin never gets a "cluster" pin (that only happens inside
--- pfDatabase:SearchQuestID, tied to the player's own qlogid), so it stays a
--- raw, un-clustered spawn candidate here instead of going through AddPoint.
--- Ported from pfQuest-HDB's route.lua, where the same mechanism handles its
--- closed-map item objectives.
+-- Closed-map item objectives retain their full set of raw spawn candidates
+-- here. The map updater can stay cheap while the route retargets as the player
+-- moves, without drawing a path through every spawn in the zone.
 pfQuest.route.SetRawObjectiveCandidates = function(self, candidates)
   if candidates and next(candidates) then
     self.rawObjectiveCandidates = candidates
@@ -331,8 +329,9 @@ pfQuest.route:SetScript("OnUpdate", function()
   -- update distances to player
   this:UpdateDistances()
 
-  -- Keep a single raw party-objective route point, but choose it on every
-  -- movement tick, mirroring pfQuest-HDB's route.lua.
+  -- Keep a single raw item-objective route point, but choose it on every
+  -- movement tick. This gives the arrow the useful nearest-target behavior of
+  -- the old multi-spawn route without restoring its enormous map path.
   if not targetTitle and this.rawObjectiveCandidates then
     local nearest, nearestDistance
     for _, candidate in ipairs(this.rawObjectiveCandidates) do
@@ -349,12 +348,13 @@ pfQuest.route:SetScript("OnUpdate", function()
       table.insert(this.coords, nearest)
       this.firstnode = nil
       this.recalculate = true
-      -- Update the lock immediately: the "stay near current pick" stability
-      -- check below still reads the pre-swap key on this same tick otherwise.
+      -- Update the lock immediately. The "stay near current pick" stability
+      -- check below still reads the pre-swap key on this same tick otherwise,
+      -- and can pull the stale target straight back before the fresh, closer
+      -- pick above ever gets a chance to show.
       automaticTargetKey = TargetKey(nearest)
     end
   end
-
   -- Reorder only when the available route nodes or an explicit target change.
   -- Re-sorting every second while the player moves causes route flicker and
   -- expensive map redraws without improving the selected objective.
@@ -519,6 +519,18 @@ pfQuest.route.drawlayer = CreateFrame("Frame", "pfQuestRouteDrawLayer", WorldMap
 pfQuest.route.drawlayer:SetFrameLevel(113)
 pfQuest.route.drawlayer:SetAllPoints()
 
+-- World-map route lines use zone-relative coordinates. Browsing another zone
+-- must hide that layer without clearing the current-zone route used by the
+-- independent arrow and minimap path.
+pfQuest.route.SetWorldMapRouteVisible = function(self, visible)
+  if not self.drawlayer then return end
+  if visible then
+    self.drawlayer:Show()
+  else
+    self.drawlayer:Hide()
+  end
+end
+
 WorldMapButton.routes = CreateFrame("Frame", "pfQuestRouteDisplay", pfQuest.route.drawlayer)
 WorldMapButton.routes:SetAllPoints()
 
@@ -569,6 +581,17 @@ pfQuest.route.arrow:SetScript("OnUpdate", function()
     return
   end
   this.tick = GetTime() + 0.05
+
+  -- GetPlayerMapPosition() resolves relative to whichever zone the World
+  -- Map is currently displaying, not the player's real zone, so browsing a
+  -- different zone makes it return 0,0 -- the same signal as a genuinely
+  -- unresolvable position. That is not the player being lost; skip the
+  -- position-dependent work below without touching visibility or the
+  -- invalid-debounce, so the arrow simply keeps pointing at its last known
+  -- direction until browsing ends.
+  if pfMap and pfMap.browsingOtherZone then
+    return
+  end
 
   xplayer, yplayer = GetPlayerMapPosition("player")
   wrongmap = xplayer == 0 and yplayer == 0 and true or nil
