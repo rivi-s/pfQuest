@@ -1831,7 +1831,7 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
   end
 
   -- hide non-available quests for your profession (uses cache when inside SearchQuests)
-  if quests[id]["skill"] and not pfDatabase:GetPlayerSkillCached(quests[id]["skill"]) then
+  if not pfDatabase:MeetsQuestProfession(id, quests[id]["skill"]) then
     return
   end
 
@@ -1904,6 +1904,15 @@ function pfDatabase:GetPlayerSkillCached(skill)
   end
   local rank = self.skillcache[professions[skill]]
   return rank or false
+end
+
+-- Profession requirements shared by Lua and HearthDB quest availability.
+function pfDatabase:MeetsQuestProfession(id, skill)
+  local requirement = pfDB.questProfessionRequirements and pfDB.questProfessionRequirements[tonumber(id)]
+  local requiredSkill = requirement and requirement[1] or tonumber(skill)
+  if not requiredSkill then return true end
+  local rank = self:GetPlayerSkillCached(requiredSkill)
+  return rank and rank >= (requirement and requirement[2] or 1) or false
 end
 
 -- SearchQuests incremental node cache.
