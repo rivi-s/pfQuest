@@ -1063,15 +1063,32 @@ function pfMap:NodeEnter()
   pfMap.highlight = pfQuest_config["mouseover"] == "1" and this.title
 end
 
-function pfMap:NodeLeave()
-  -- wotlk: re-enable blop tooltips
-  if compat.client >= 30300 then
-    WorldMapPOIFrame.allowBlobTooltip = true
+-- Pins may disappear during a refresh without receiving OnLeave. Tooltip
+-- addons can also alter mouse focus, so keep cleanup independent of that event.
+function pfMap:ReleaseNodeTooltip(frame)
+  if not frame then return end
+  local tooltip = frame.pfQuestTooltip
+  frame.pfQuestTooltip = nil
+  if tooltip and tooltip:GetOwner() == frame then tooltip:Hide() end
+  if self.nodeTooltipFrame == frame then
+    self.nodeTooltipFrame = nil
+    self.highlight = nil
+    if compat.client >= 30300 then WorldMapPOIFrame.allowBlobTooltip = true end
   end
+end
 
-  local tooltip = this.worldmap and WorldMapTooltip or GameTooltip
-  tooltip:Hide()
-  pfMap.highlight = nil
+function pfMap:UpdateNodeTooltip()
+  local frame = self.nodeTooltipFrame
+  if not frame then return end
+  local tooltip = frame.pfQuestTooltip
+  if not tooltip or tooltip:GetOwner() ~= frame or not tooltip:IsShown()
+    or not frame:IsShown() or GetMouseFocus() ~= frame then
+    self:ReleaseNodeTooltip(frame)
+  end
+end
+
+function pfMap:NodeLeave()
+  pfMap:ReleaseNodeTooltip(this)
 end
 
 function pfMap:BuildNode(name, parent)
@@ -1091,8 +1108,18 @@ function pfMap:BuildNode(name, parent)
   f:SetHeight(f.defsize)
 
   f.Animate = NodeAnimate
-  f:SetScript("OnEnter", pfMap.NodeEnter)
+  f:SetScript("OnEnter", function()
+    local frame = this
+    if pfMap.nodeTooltipFrame and pfMap.nodeTooltipFrame ~= frame then
+      pfMap:ReleaseNodeTooltip(pfMap.nodeTooltipFrame)
+    end
+    frame.pfQuestTooltip = frame.worldmap and WorldMapTooltip or GameTooltip
+    pfMap.nodeTooltipFrame = frame
+    -- Resolve dynamically: Turtle extends NodeEnter after the core loads.
+    pfMap.NodeEnter()
+  end)
   f:SetScript("OnLeave", pfMap.NodeLeave)
+  f:SetScript("OnHide", function() pfMap:ReleaseNodeTooltip(this) end)
 
   f.tex = f:CreateTexture(nil, "BACKGROUND")
   f.tex:SetAllPoints(f)
@@ -2172,6 +2199,8 @@ local nodeUpdateDriver = CreateFrame("Frame", nil, UIParent)
 nodeUpdateDriver:SetScript("OnUpdate", function()
   if (this.throttle or 0) > GetTime() then return end
   this.throttle = GetTime() + 0.05
+
+  pfMap:UpdateNodeTooltip()
 
   if pfMap.queue_update and pfMap.queue_update + 0.25 < GetTime() then
     local questBusy = pfQuest and ((pfQuest.queueCount or 0) > 0
