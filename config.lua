@@ -146,6 +146,7 @@ pfQuest_defconfig = {
   { text = L["Enable Quest Log Buttons"], default = "1", type = "checkbox", config = "questlogbuttons" },
   { text = L["Enable Quest Link Support"], default = "1", type = "checkbox", config = "questlinks" },
   { text = "Information & Tooltips", default = nil, type = "header", page = "general" },
+  { text = "Changelog", default = "1", type = "button", func = function() pfQuestChangelog:Show() end },
   { text = "Quest Database URL", default = "1", type = "button", func = OpenDatabaseURL },
   { text = L["Show Database IDs"], default = "0", type = "checkbox", config = "showids" },
   { text = L["Draw Favorites On Login"], default = "0", type = "checkbox", config = "favonlogin" },

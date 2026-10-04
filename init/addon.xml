@@ -5,6 +5,8 @@
   <Include file="..\overwrites.lua" />
   <Include file="..\locales.lua" />
   <Include file="..\config.lua" />
+  <Include file="..\changelog.lua" />
+  <Include file="..\changelog-data.lua" />
   <Include file="..\slashcmd.lua" />
   <Include file="..\database.lua" />
   <Include file="..\icons.lua" />
