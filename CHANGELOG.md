@@ -1,5 +1,12 @@
 # pfQuest base patch notes
 
+## 8.0.45 — 2026-10-04
+
+- Fixed map and minimap tooltips staying visible after leaving a marker.
+- Added support for the optional repeatable quest display setting supplied by Turtle quest data.
+- Added profession skill-rank checks for quest availability.
+- Added this changelog and one update reminder per installed version.
+
 ## 8.0.44 — 2026-10-02
 
 - Redrew minimap objectives and route arrows immediately after quest-log changes while the World Map is closed.

@@ -175,6 +175,7 @@ pfQuest_defconfig = {
   { text = L["Display Low Level Quest Givers"], default = "0", type = "checkbox", config = "showlowlevel" },
   { text = L["Display Level+3 Quest Givers"], default = "0", type = "checkbox", config = "showhighlevel" },
   { text = L["Display Event & Daily Quests"], default = "0", type = "checkbox", config = "showfestival" },
+  { text = L["Display Repeatable Quests"] .. " |cffffcc00[Beta]|r", default = "0", type = "checkbox", config = "showrepeatable", tooltip = "Show known repeatable quest offers with blue exclamation marks. Existing quest requirements still apply. Updates after accepting or turning in a quest are still being tested. Some repeatable quests may be missing; please report them with the quest name and ID if known." },
 
   { text = L["Map & Minimap"], default = nil, type = "header", page = "map" },
   { text = L["Enable Minimap Nodes"], default = "1", type = "checkbox", config = "minimapnodes" },
@@ -404,6 +405,7 @@ local fullRefreshSettings = {
   showlowlevel = true,
   showhighlevel = true,
   showfestival = true,
+  showrepeatable = true,
 }
 
 local reloadSettings = {

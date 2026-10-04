@@ -198,3 +198,9 @@ The `mines` and `herbs` lists support an optional skill range and an `auto` shor
 ```
 
 Available tracking lists: `auctioneer`, `banker`, `battlemaster`, `chests`, `fish`, `flight`, `herbs`, `innkeeper`, `mailbox`, `meetingstone`, `mines`, `rares`, `repair`, `spirithealer`, `stablemaster`, `vendor`
+
+## Author credits
+
+Original pfQuest authors: Shagu and txtsd.
+
+Rivi maintains this fork and contributes ongoing fixes, features, quest database corrections, and HearthDB integration.

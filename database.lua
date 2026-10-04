@@ -1791,8 +1791,11 @@ function pfDatabase:QuestFilter(id, plevel, pclass, prace)
     return
   end
 
-  -- hide completed quests
-  if pfQuest_history[id] then
+  local repeatable = pfDB.quests.repeatable and pfDB.quests.repeatable[id]
+  if repeatable and pfQuest_config["showrepeatable"] ~= "1" then return end
+
+  -- Repeatable quests remain available after a prior turn-in.
+  if pfQuest_history[id] and not repeatable then
     return
   end
 
@@ -2020,7 +2023,7 @@ function pfDatabase:SearchQuests(meta, maps)
       end
 
       -- tint event quests as blue
-      if quests[id]["event"] then
+      if quests[id]["event"] or (pfDB.quests.repeatable and pfDB.quests.repeatable[id]) then
         meta["texture"] = pfQuestConfig.path .. "\\img\\available"
         meta["vertex"] = VERTEX_BLUE
         meta["layer"] = 2

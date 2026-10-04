@@ -1,7 +1,8 @@
 -- Published history and explicitly labeled development notes.
 pfQuestChangelog:Register("pfQuest", {
-{ ["version"] = "Next update - testing", ["date"] = "2026-10-03", ["notes"] = {
+{ ["version"] = "8.0.45", ["date"] = "2026-10-04", ["notes"] = {
 "Fixed map and minimap tooltips staying visible after leaving a marker.",
+"Added support for the optional repeatable quest display setting supplied by Turtle quest data.",
 "Added profession skill-rank checks for quest availability.",
 "Added this changelog and one update reminder per installed version."
 } },
