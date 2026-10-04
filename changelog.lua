@@ -34,6 +34,37 @@ function changelog:BuildText()
   return table.concat(lines, "\n")
 end
 
+function changelog:HasUnread()
+  local read = pfQuest_global and pfQuest_global.changelogRead or {}
+  for addon in pairs(self.sources) do
+    local version = GetAddOnMetadata(addon, "Version")
+    if version and version ~= "" then
+      local key = (self.edition or "lua") .. ":" .. addon .. ":" .. version
+      if not read[key] then return true end
+    end
+  end
+  return false
+end
+
+function changelog:UpdateButton()
+  local button = pfQuestConfig and pfQuestConfig.changelog
+  if not button or not button.unreadBorder then return end
+  if self:HasUnread() then button.unreadBorder:Show() else button.unreadBorder:Hide() end
+end
+
+function changelog:MarkRead()
+  pfQuest_global = pfQuest_global or {}
+  pfQuest_global.changelogRead = pfQuest_global.changelogRead or {}
+  for addon in pairs(self.sources) do
+    local version = GetAddOnMetadata(addon, "Version")
+    if version and version ~= "" then
+      local key = (self.edition or "lua") .. ":" .. addon .. ":" .. version
+      pfQuest_global.changelogRead[key] = true
+    end
+  end
+  self:UpdateButton()
+end
+
 function changelog:Announce()
   pfQuest_global = pfQuest_global or {}
   pfQuest_global.changelogSeen = pfQuest_global.changelogSeen or {}
@@ -46,8 +77,9 @@ function changelog:Announce()
     end
   end
   if updated then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpfQuest|r updated. Open Settings > General > Changelog to see what's new.")
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpfQuest|r updated. Open Settings > Changelog to see what's new.")
   end
+  self:UpdateButton()
 end
 
 function changelog:Show()
@@ -106,6 +138,7 @@ function changelog:Show()
       scroll:UpdateScrollChildRect()
       scroll:SetVerticalScroll(0)
       getglobal("pfQuestChangelogScrollScrollBar"):SetValue(0)
+      changelog:MarkRead()
     end)
   end
   self.window:Show()

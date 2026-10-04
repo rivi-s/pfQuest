@@ -146,7 +146,6 @@ pfQuest_defconfig = {
   { text = L["Enable Quest Log Buttons"], default = "1", type = "checkbox", config = "questlogbuttons" },
   { text = L["Enable Quest Link Support"], default = "1", type = "checkbox", config = "questlinks" },
   { text = "Information & Tooltips", default = nil, type = "header", page = "general" },
-  { text = "Changelog", default = "1", type = "button", func = function() pfQuestChangelog:Show() end },
   { text = "Quest Database URL", default = "1", type = "button", func = OpenDatabaseURL },
   { text = L["Show Database IDs"], default = "0", type = "checkbox", config = "showids" },
   { text = L["Draw Favorites On Login"], default = "0", type = "checkbox", config = "favonlogin" },
@@ -244,6 +243,7 @@ end)
 
 pfQuestConfig:SetScript("OnShow", function()
   this:UpdateConfigEntries()
+  if pfQuestChangelog then pfQuestChangelog:UpdateButton() end
 end)
 
 pfQuestConfig.vpos = 40
@@ -319,6 +319,37 @@ pfQuestConfig.welcome.text:SetAllPoints(pfQuestConfig.welcome)
 pfQuestConfig.welcome.text:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
 pfQuestConfig.welcome.text:SetText(L["Welcome Screen"])
 pfUI.api.SkinButton(pfQuestConfig.welcome)
+
+-- Match the footer actions; unread highlighting is static, with no timer.
+pfQuestConfig.changelog = CreateFrame("Button", "pfQuestConfigChangelog", pfQuestConfig)
+pfQuestConfig.changelog:SetWidth(120)
+pfQuestConfig.changelog:SetHeight(28)
+pfQuestConfig.changelog:SetPoint("LEFT", pfQuestConfig.welcome, "RIGHT", 8, 0)
+pfQuestConfig.changelog:SetScript("OnClick", function() pfQuestChangelog:Show() end)
+pfQuestConfig.changelog.text = pfQuestConfig.changelog:CreateFontString("Caption", "LOW", "GameFontWhite")
+pfQuestConfig.changelog.text:SetAllPoints(pfQuestConfig.changelog)
+pfQuestConfig.changelog.text:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
+pfQuestConfig.changelog.text:SetText("Changelog")
+pfUI.api.SkinButton(pfQuestConfig.changelog)
+local unread = CreateFrame("Frame", nil, pfQuestConfig.changelog)
+pfQuestConfig.changelog.unreadBorder = unread
+unread:SetAllPoints(pfQuestConfig.changelog)
+unread:SetFrameLevel(pfQuestConfig.changelog:GetFrameLevel() + 1)
+for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+  local edge = unread:CreateTexture(nil, "OVERLAY")
+  edge:SetTexture("Interface\\Buttons\\WHITE8X8")
+  edge:SetVertexColor(0.2, 1, 0.8, 0.9)
+  if side == "TOP" or side == "BOTTOM" then
+    edge:SetPoint(side .. "LEFT", unread, side .. "LEFT", -2, side == "TOP" and 2 or -2)
+    edge:SetPoint(side .. "RIGHT", unread, side .. "RIGHT", 2, side == "TOP" and 2 or -2)
+    edge:SetHeight(2)
+  else
+    edge:SetPoint("TOP" .. side, unread, "TOP" .. side, side == "LEFT" and -2 or 2, 2)
+    edge:SetPoint("BOTTOM" .. side, unread, "BOTTOM" .. side, side == "LEFT" and -2 or 2, -2)
+    edge:SetWidth(2)
+  end
+end
+unread:Hide()
 
 pfQuestConfig.save = CreateFrame("Button", "pfQuestConfigReload", pfQuestConfig)
 pfQuestConfig.save:SetWidth(160)
