@@ -1078,7 +1078,7 @@ function pfMap:ReleaseNodeTooltip(frame)
   if not frame then return end
   local tooltip = frame.pfQuestTooltip
   frame.pfQuestTooltip = nil
-  if tooltip and tooltip:GetOwner() == frame then tooltip:Hide() end
+  if tooltip and tooltip:IsOwned(frame) then tooltip:Hide() end
   if self.nodeTooltipFrame == frame then
     self.nodeTooltipFrame = nil
     self.highlight = nil
@@ -1090,7 +1090,7 @@ function pfMap:UpdateNodeTooltip()
   local frame = self.nodeTooltipFrame
   if not frame then return end
   local tooltip = frame.pfQuestTooltip
-  if not tooltip or tooltip:GetOwner() ~= frame or not tooltip:IsShown()
+  if not tooltip or not tooltip:IsOwned(frame) or not tooltip:IsShown()
     or not frame:IsShown()
     or (frame.clickThrough and not MouseIsOver(frame))
     or (not frame.clickThrough and GetMouseFocus() ~= frame) then
