@@ -1549,7 +1549,8 @@ function pfDatabase:SearchQuestID(id, meta, maps)
         -- live objective count alone. Static quests with no objective table
         -- are genuine talk/report quests and are ready as soon as accepted.
         local _, _, _, _, _, complete = compat.GetQuestLogTitle(meta["qlogid"])
-        local ready = complete == true or complete == 1 or not quests[id]["obj"]
+        local ready = complete == true or complete == 1 or (not quests[id]["obj"]
+          and not (pfDB.quests.requireClientCompletion and pfDB.quests.requireClientCompletion[id]))
         ender_texture = ready and pfQuestConfig.path .. "\\img\\complete_c"
           or pfQuestConfig.path .. "\\img\\complete"
       else
@@ -1935,6 +1936,7 @@ function pfDatabase:SearchQuests(meta, maps)
   local meta = meta or {}
 
   local plevel = UnitLevel("player")
+  local refreshAppearance = self.lastQuestGiverLevel ~= plevel
   local pfaction = UnitFactionGroup("player")
   if pfaction == "Horde" then
     pfaction = "H"
@@ -1996,7 +1998,7 @@ function pfDatabase:SearchQuests(meta, maps)
   -- Phase 3: add nodes only for quests newly entering the passing set.
   -- Quests already in lastQuestGiversSet are skipped — their nodes exist.
   for id in pairs(currentSet) do
-    if not self.lastQuestGiversSet[id] then
+    if refreshAppearance or not self.lastQuestGiversSet[id] then
       -- set metadata
       meta["quest"] = (pfDB.quests.loc[id] and pfDB.quests.loc[id].T) or UNKNOWN
       meta["questid"] = id
@@ -2064,6 +2066,8 @@ function pfDatabase:SearchQuests(meta, maps)
   for id, qlogid in pairs(activeRebuild) do
     pfDatabase:SearchQuestID(id, { ["addon"] = "PFQUEST", ["qlogid"] = qlogid })
   end
+
+  self.lastQuestGiverLevel = plevel
 
   -- Update lastQuestGiversSet to reflect the current passing set.
   -- Reuse the table in-place to avoid allocation.

@@ -733,8 +733,9 @@ function pfMap:AddNode(meta)
     -- the same-layer early return below, otherwise the minimap keeps the
     -- stale texture until a reload or unrelated map rebuild.
     if existing.questid and meta.questid and existing.questid == meta.questid
-        and existing.texture ~= meta.texture then
+        and (existing.texture ~= meta.texture or existing.vertex ~= meta.vertex) then
       existing.texture = meta.texture
+      existing.vertex = meta.vertex
       existing.QTYPE = meta.QTYPE
       existing.qlogid = meta.qlogid
       existing.description = meta.description
