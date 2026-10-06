@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.46 — 2026-10-06
+
+- Fixed questgiver marker colors not refreshing after leveling up.
+- Corrected false completed turn-in markers for the three UnGoro pylon discovery quests.
+
 ## 8.0.45 — 2026-10-04
 
 - Fixed map and minimap tooltips staying visible after leaving a marker.

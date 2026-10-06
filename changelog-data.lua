@@ -1,5 +1,9 @@
 -- Published history and explicitly labeled development notes.
 pfQuestChangelog:Register("pfQuest", {
+{ ["version"] = "8.0.46", ["date"] = "2026-10-06", ["notes"] = {
+"Fixed questgiver marker colors not refreshing after leveling up.",
+"Corrected false completed turn-in markers for the three UnGoro pylon discovery quests."
+} },
 { ["version"] = "8.0.45", ["date"] = "2026-10-04", ["notes"] = {
 "Fixed map and minimap tooltips staying visible after leaving a marker.",
 "Added support for the optional repeatable quest display setting supplied by Turtle quest data.",
