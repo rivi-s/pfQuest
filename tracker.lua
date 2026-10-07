@@ -233,6 +233,17 @@ tracker:SetScript("OnMouseUp", function()
 end)
 
 tracker:SetScript("OnUpdate", function()
+  -- Native objective reads can emit more quest-log events. Keep those events
+  -- read-only and coalesce row refreshes outside their dispatch stack.
+  if (this.contentTick or 0) <= GetTime() then
+    this.contentTick = GetTime() + 0.2
+    for _, button in pairs(this.buttons or {}) do
+      if button.contentPending then
+        button.contentPending = nil
+        tracker.ButtonEvent(button)
+      end
+    end
+  end
   -- Objective updates can change an entry's height. Reflow the complete list
   -- once the QUEST_LOG_UPDATE burst settles so entries never retain old offsets.
   if this.layoutAt and this.layoutAt <= GetTime() then
@@ -914,7 +925,7 @@ function tracker.ButtonAdd(title, node)
 
     tracker.buttons[id]:SetScript("OnEnter", tracker.ButtonEnter)
     tracker.buttons[id]:SetScript("OnLeave", tracker.ButtonLeave)
-    tracker.buttons[id]:SetScript("OnEvent", tracker.ButtonEvent)
+    tracker.buttons[id]:SetScript("OnEvent", function() this.contentPending = true end)
     tracker.buttons[id]:SetScript("OnClick", tracker.ButtonClick)
   end
 

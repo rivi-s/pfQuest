@@ -1,5 +1,9 @@
 -- Published history and explicitly labeled development notes.
 pfQuestChangelog:Register("pfQuest", {
+{ ["version"] = "8.0.47", ["date"] = "2026-10-06", ["notes"] = {
+"Fixed long login stalls caused by tracker objective reads during quest-log events; row updates now run together on a later frame.",
+"Removed repeated native quest-ID lookups from quest-log button refreshes."
+} },
 { ["version"] = "8.0.46", ["date"] = "2026-10-06", ["notes"] = {
 "Fixed questgiver marker colors not refreshing after leveling up.",
 "Corrected false completed turn-in markers for the three UnGoro pylon discovery quests."

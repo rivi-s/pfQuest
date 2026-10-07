@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.47 — 2026-10-06
+
+- Fixed long login stalls caused by tracker objective reads during quest-log events; row updates now run together on a later frame.
+- Removed repeated native quest-ID lookups from quest-log button refreshes.
+
 ## 8.0.46 — 2026-10-06
 
 - Fixed questgiver marker colors not refreshing after leveling up.
