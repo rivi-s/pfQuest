@@ -533,6 +533,7 @@ function tracker.ButtonClick()
   elseif IsControlKeyDown() and pfQuest_config["spawncolors"] == "0" then
     -- switch color
     pfQuest_colors[this.title] = { pfMap.str2rgb(this.title .. GetTime()) }
+    pfMap:RefreshPinColor(this.title)
     pfMap:UpdateNodes()
   elseif expand_states[this.title] == 0 then
     expand_states[this.title] = 1

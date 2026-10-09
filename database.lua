@@ -678,6 +678,10 @@ function pfDatabase:BuildQuestDescription(meta)
       (meta.quest or UNKNOWN)
     )
   elseif meta.QTYPE == "UNIT_OBJECTIVE" then
+    local talk = pfDB.quests.talkObjectives and pfDB.quests.talkObjectives[meta.questid]
+    if talk and talk[meta.spawnid] then
+      return string.format(pfQuest_Loc["Talk to |cff33ffcc%s|r"], (meta.spawn or UNKNOWN))
+    end
     if pfDatabase:IsFriendly(meta.spawnid) then
       return string.format(pfQuest_Loc["Talk to |cff33ffcc%s|r"], (meta.spawn or UNKNOWN))
     else
@@ -1591,6 +1595,11 @@ function pfDatabase:SearchQuestID(id, meta, maps)
     if objectives then
       for i = 1, objectives, 1 do
         local text, type, done = GetQuestLogLeaderBoard(i, meta["qlogid"])
+
+        local talk = pfDB.quests.talkObjectives and pfDB.quests.talkObjectives[id]
+        for unitID, row in pairs(talk or {}) do
+          if row == i then parse_obj.U[unitID] = done and "DONE" or "PROG" end
+        end
 
         -- spawn data
         if type == "monster" then

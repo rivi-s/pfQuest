@@ -1,5 +1,9 @@
 -- Published history and explicitly labeled development notes.
 pfQuestChangelog:Register("pfQuest", {
+{ ["version"] = "8.0.48", ["date"] = "2026-10-08", ["notes"] = {
+"Restored background zone-map pin preparation in small batches, reducing visible redraw on opening.",
+"Fixed tracker Ctrl-click color changes not repainting map and minimap pins."
+} },
 { ["version"] = "8.0.47", ["date"] = "2026-10-06", ["notes"] = {
 "Fixed long login stalls caused by tracker objective reads during quest-log events; row updates now run together on a later frame.",
 "Removed repeated native quest-ID lookups from quest-log button refreshes."

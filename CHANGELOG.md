@@ -1,5 +1,10 @@
 # pfQuest base patch notes
 
+## 8.0.48 — 2026-10-08
+
+- Restored background zone-map pin preparation in small batches, reducing visible redraw on opening.
+- Fixed tracker Ctrl-click color changes not repainting map and minimap pins.
+
 ## 8.0.47 — 2026-10-06
 
 - Fixed long login stalls caused by tracker objective reads during quest-log events; row updates now run together on a later frame.

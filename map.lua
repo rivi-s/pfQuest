@@ -1155,6 +1155,16 @@ local function UpdateMinimapIconFade(frame, distance)
   frame.pic:SetAlpha(math.max(0, math.min(alpha, 1)))
 end
 
+-- Saved colors can change without changing a node or its cache key.
+function pfMap:RefreshPinColor(colorKey)
+  local red, green, blue = self.str2rgb(colorKey)
+  for frame in pairs(self.highlightdb or {}) do
+    if frame.color == colorKey and not frame.texture and frame.tex then
+      frame.tex:SetVertexColor(red, green, blue, 1)
+    end
+  end
+end
+
 function pfMap:UpdateNode(frame, node, color, obj, distance)
   -- clear node to title association table
   if pfMap.highlightdb[frame] then
@@ -2171,6 +2181,14 @@ pfMap:SetScript("OnEvent", function()
         end
       end
       pfMap.lastUpdateZone = nil
+    elseif WorldMapFrame:IsShown() and pfMap.hiddenPinsReady == newzone then
+      pfMap.hiddenPinJob = nil
+      pfMap.hiddenPinsReady = nil
+      pfMap.queue_update = nil
+      if pfQuest.route then
+        pfQuest.route.lastDrawX, pfQuest.route.lastDrawY, pfQuest.route.lastDrawNode = nil, nil, nil
+      end
+      pfMap:UpdateNodes()
     elseif pfMap.mapJustOpened then
       -- Map opens and map selections emit a short event burst. Render after
       -- the normal settle period. Even enhanced clients emit a burst while
@@ -2201,14 +2219,99 @@ local hlstate, shiftstate, transition, hidecluster, fps, resetmap
 -- Keep queued node rebuilds independent of the map canvas. Some clients stop
 -- updating WorldFrame children while particular UI panels are closed, which
 -- leaves minimap pins and routes stale until a later world-map refresh.
+-- Prepare hidden zone-pin frames in bounded batches. This never reads the
+-- quest log or changes tracker/routes; the visible renderer remains authoritative.
+function pfMap:PrepareHiddenMapPins()
+  if WorldMapFrame:IsShown() or self.queue_update then
+    self.hiddenPinJob = nil
+    return
+  end
+  local map = self:GetMapID(GetCurrentMapContinent(), GetCurrentMapZone())
+  if not map or not self.dirtyMaps[map] then self.hiddenPinJob = nil; return end
+  local width, height = WorldMapButton:GetWidth(), WorldMapButton:GetHeight()
+  if width <= 0 or height <= 0 then return end
+  local job = self.hiddenPinJob
+  if not job or job.map ~= map or job.width ~= width or job.height ~= height then
+    job = { map = map, width = width, height = height, index = 1, entries = {}, nodes = {} }
+    for addon, maps in pairs(self.nodes) do
+      for coords, node in pairs(maps[map] or {}) do
+        table.insert(job.entries, coords)
+        table.insert(job.nodes, node)
+      end
+    end
+    self.hiddenPinJob = job
+    self.hiddenPinsReady = nil
+  end
+  if job.finished then return end
+  local stop = math.min(job.index + 5, table.getn(job.entries))
+  local color = pfQuest_config["spawncolors"] == "1" and "spawn" or "title"
+  for index = job.index, stop do
+    local coords, node = job.entries[index], job.nodes[index]
+    local pin = self.pins[index]
+    if not pin then
+      pin = self:BuildNode("pfMapPin" .. index, WorldMapButton)
+      self.pins[index] = pin
+    end
+    if pin:GetParent() ~= WorldMapButton then
+      pin:SetParent(WorldMapButton)
+      pin.lastX, pin.lastY = nil, nil
+    end
+    if pin.node ~= node or self.dirtyNodes[node] then
+      self:UpdateNode(pin, node, color)
+      self.dirtyNodes[node] = nil
+    end
+    local x, y
+    if coord_cache[coords] then
+      x, y = coord_cache[coords][1], coord_cache[coords][2]
+    else
+      local _, _, sx, sy = strfind(coords, "(.*)|(.*)")
+      x, y = sx + 0, sy + 0
+      coord_cache[coords] = { x, y }
+    end
+    local px, py = x / 100 * width, y / 100 * height
+    if pin.lastX ~= px or pin.lastY ~= py then
+      pin:ClearAllPoints()
+      pin:SetPoint("CENTER", WorldMapButton, "TOPLEFT", px, -py)
+      pin.lastX, pin.lastY = px, py
+    end
+    -- A reused pin may retain a hover fade from its previous binding.
+    -- Set its resting opacity before the parent map becomes visible.
+    pin:SetAlpha((pin.texture or pin.cluster) and 1 or pin.defalpha)
+    pin:Hide()
+  end
+  job.index = stop + 1
+  -- Old surplus pins are retired in equally bounded batches.
+  if job.index > table.getn(job.entries) then
+    job.cleanup = job.cleanup or job.index
+    local last = math.min(job.cleanup + 5, table.getn(self.pins))
+    for index = job.cleanup, last do self.pins[index]:Hide() end
+    job.cleanup = last + 1
+    if job.cleanup > table.getn(self.pins) then
+      job.finished = true
+      self.hiddenPinsReady = map
+    end
+  end
+end
+
 local nodeUpdateDriver = CreateFrame("Frame", nil, UIParent)
 nodeUpdateDriver:SetScript("OnUpdate", function()
+  -- Keep preparation bounded to six pins per rendered frame, rather than
+  -- six per50ms: dense zones otherwise need several seconds to get ready.
+  local preparingBusy = pfQuest and ((pfQuest.queueCount or 0) > 0
+    or pfQuest.updateQuestGivers or pfQuest.updateQuestLog)
+  if pfMap.queue_update or preparingBusy then
+    pfMap.hiddenPinJob = nil
+    pfMap.hiddenPinsReady = nil
+  elseif not WorldMapFrame:IsShown() then
+    pfMap:PrepareHiddenMapPins()
+  end
+
   if (this.throttle or 0) > GetTime() then return end
   this.throttle = GetTime() + 0.05
-
   pfMap:UpdateNodeTooltip()
 
-  if pfMap.queue_update and pfMap.queue_update + 0.25 < GetTime() then
+  local renderDelay = WorldMapFrame:IsShown() and 0.05 or 0.25
+  if pfMap.queue_update and pfMap.queue_update + renderDelay < GetTime() then
     local questBusy = pfQuest and ((pfQuest.queueCount or 0) > 0
       or pfQuest.updateQuestGivers or pfQuest.updateQuestLog)
     if not questBusy then
