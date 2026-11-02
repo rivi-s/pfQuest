@@ -1,63 +1,37 @@
 # pfQuest
 
-<img src="https://raw.githubusercontent.com/The-Kludge-Bureau/pfQuest/main/_img/mode.png" float="right" align="right" width="25%">
+Quest markers, a quest tracker and journal, a database browser, and gathering tracking for World of Warcraft. This fork includes RavenCraft/Turtle fixes and interface additions. On the 1.12 client, add the matching Turtle extension for custom content.
 
-pfQuest is a quest helper and database browser for World of Warcraft Vanilla (1.12), The Burning Crusade (2.4.3), and Wrath of the Lich King (3.3.5a). Accept a quest and the relevant NPCs, monsters, and objects are automatically pinned on your world map and minimap. Open the database browser to look up any unit, item, or game object in the game — or use the chat commands to build macros for tracking gathering nodes.
+## Choose an edition
 
-The goal is to provide an accurate in-game equivalent of [AoWoW](http://db.vanillagaming.org/) or [Wowhead](http://www.wowhead.com/), not a quest guide or turn-by-turn assistant. The Vanilla database is powered by [VMaNGOS](https://github.com/vmangos). The Burning Crusade version uses data from [CMaNGOS](https://github.com/cmangos) with translations from [MaNGOS Extras](https://github.com/MangosExtras).
+| Edition | Install | Requirements |
+| --- | --- | --- |
+| Regular pfQuest | [pfQuest](https://github.com/rivi-s/pfQuest) | Loads its database in Lua; no HearthDB DLL required. |
+| Regular Turtle/Raven content | [pfQuest-turtle](https://github.com/rivi-s/pfQuest-turtle) alongside regular pfQuest | Both regular addon folders. |
+| HDB Vanilla | [pfQuest-HDB-Install](https://github.com/rivi-s/pfQuest-HDB-Install) | HearthDB client component; English database included. |
+| HDB Turtle/Raven content | [pfQuest-turtle-HDB-Install](https://github.com/rivi-s/pfQuest-turtle-HDB-Install) | HearthDB client component; both addon folders and combined English database included. |
 
-pfQuest is the successor of [ShaguQuest](https://shagu.org/ShaguQuest/), written from scratch with no dependency on any specific map or questlog addon. It is designed to work alongside the default UI and any other addon. If you run into a conflict, please open an issue on the bugtracker.
+Install one edition at a time. Both editions use the folder names `pfQuest` and `pfQuest-turtle`; mixing regular and HDB folders can leave the wrong database or code loaded.
 
-You can check the [Latest Changes](https://github.com/The-Kludge-Bureau/pfQuest/commits/master) page to see what has changed recently.
+## Install or update the regular edition
 
-## Before You Install
+1. Close the game. Back up your existing addon folders before switching editions.
+2. [Download this fork](https://github.com/rivi-s/pfQuest/archive/refs/heads/master.zip), extract it, and rename `pfQuest-master` to `pfQuest`.
+3. Replace `Interface/AddOns/pfQuest` with that folder. Keep the contents directly inside `pfQuest`, without an extra nested directory.
+4. For Turtle/Raven content, also install [pfQuest-turtle](https://github.com/rivi-s/pfQuest-turtle) using its instructions.
+5. Keep character settings in `WTF`. Restart, enable the addons, and open `/db config` or `/db show`.
 
-pfQuest ships a complete database of all spawns, objects, items, and quests. The full package is approximately 80 MB and is loaded into memory once at login — memory usage is stable after that and does not grow during play.
+On Vanilla, set **Script Memory** to `0` in the character-selection AddOns panel if the client enforces an addon memory limit. The regular edition loads large Lua database tables at login; memory use also depends on gameplay and other addons.
 
-On Vanilla clients, WoW will show a warning if an addon exceeds the default memory limit. **Before installing, set Script Memory to `0` (no limit)** in the AddOns panel of the character selection screen. This is a one-time step. A [screenshot showing where to find the setting](https://raw.githubusercontent.com/The-Kludge-Bureau/pfQuest/main/_img/addons-memory.png) is available if you are unsure where to look.
+This repository retains Vanilla, TBC 2.4.3, and WotLK 3.3.5a support from pfQuest. The WotLK mode remains beta and does not include a complete WotLK database. The instructions above cover the Vanilla/Turtle installation; they do not establish Classic Era 1.14 support.
 
-## Downloads
+## Help and reports
 
-### World of Warcraft: Vanilla
+Read [troubleshooting and report details](SUPPORT.md) for missing markers, low-level quest filters, completed quest history, and addon conflicts. Report regular base-addon issues [here](https://github.com/rivi-s/pfQuest/issues) and Turtle content issues [here](https://github.com/rivi-s/pfQuest-turtle/issues).
 
-1. **[Download pfQuest (full)](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-full.zip)**
-2. Unpack the zip file
-3. Move the `pfQuest` folder into `Wow-Directory\Interface\AddOns`
-4. Restart WoW
+## Project status
 
-Slim packages (single language): [English](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-enUS.zip) · [German](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-deDE.zip) · [French](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-frFR.zip) · [Spanish](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-esES.zip) · [Korean](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-koKR.zip) · [Chinese](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-zhCN.zip) · [Russian](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-ruRU.zip)
-
-### World of Warcraft: The Burning Crusade
-
-1. **[Download pfQuest (full)](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-full-tbc.zip)**
-2. Unpack the zip file
-3. Move the `pfQuest-tbc` folder into `Wow-Directory\Interface\AddOns`
-4. Restart WoW
-
-Slim packages (single language): [English](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-enUS-tbc.zip) · [German](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-deDE-tbc.zip) · [French](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-frFR-tbc.zip) · [Spanish](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-esES-tbc.zip) · [Korean](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-koKR-tbc.zip) · [Chinese](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-zhCN-tbc.zip) · [Russian](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-ruRU-tbc.zip)
-
-### World of Warcraft: Wrath of the Lich King
-
-> [!IMPORTANT]
->
-> **This is a BETA version of pfQuest**
->
-> It is able to run on a WotLK (3.3.5a) client, but does not yet ship a WotLK database.
-> All available content is limited to Vanilla & TBC as of now.
-
-1. **[Download pfQuest (full)](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-full-wotlk.zip)**
-2. Unpack the zip file
-3. Move the `pfQuest-wotlk` folder into `Wow-Directory\Interface\AddOns`
-4. Restart WoW
-
-Slim packages (single language): [English](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-enUS-wotlk.zip) · [German](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-deDE-wotlk.zip) · [French](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-frFR-wotlk.zip) · [Spanish](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-esES-wotlk.zip) · [Korean](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-koKR-wotlk.zip) · [Chinese](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-zhCN-wotlk.zip) · [Russian](https://github.com/The-Kludge-Bureau/pfQuest/releases/latest/download/pfQuest-ruRU-wotlk.zip)
-
-### Development Version
-
-The development version includes databases for all languages and all client expansions in a single folder. It will work in both Vanilla and TBC mode depending on the folder name. Due to the amount of included data, expect higher RAM and disk usage and slightly longer load times compared to the release packages.
-
-- Clone via Git: [`https://github.com/The-Kludge-Bureau/pfQuest.git`](https://github.com/The-Kludge-Bureau/pfQuest.git)
-- Download as zip: **[master.zip](https://github.com/The-Kludge-Bureau/pfQuest/archive/master.zip)**
+Maintenance focuses on occasional database corrections and reported bugs. Updates have no fixed schedule. Compatibility with Raven's Classic Era 1.14 client is unverified; work on that port is paused. These packages target the existing 1.12 client.
 
 ## Controls
 
@@ -199,8 +173,7 @@ The `mines` and `herbs` lists support an optional skill range and an `auto` shor
 
 Available tracking lists: `auctioneer`, `banker`, `battlemaster`, `chests`, `fish`, `flight`, `herbs`, `innkeeper`, `mailbox`, `meetingstone`, `mines`, `rares`, `repair`, `spirithealer`, `stablemaster`, `vendor`
 
-## Author credits
 
-Original pfQuest authors: Shagu and txtsd.
+## Credits
 
-Rivi maintains this fork and contributes ongoing fixes, features, quest database corrections, and HearthDB integration.
+Original pfQuest authors: Shagu and txtsd. Original Turtle extension: Shagu, with contributors listed in the addon TOC. Rivi maintains these forks and contributes features, database corrections, and HearthDB integration.

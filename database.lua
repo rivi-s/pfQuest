@@ -1814,9 +1814,25 @@ function pfDatabase:IsQuestOfferExcluded(id)
   return unavailableQuestOffers[tonumber(id)] and true or false
 end
 
+-- Alternate offers in a mutually exclusive group disappear when another
+-- member is active or completed. Ignore the row's self-reference.
+function pfDatabase:IsQuestExclusiveBlocked(id)
+  id = tonumber(id)
+  local quest = quests[id]
+  local group = pfDB.quests.exclusive and pfDB.quests.exclusive[id]
+    or (type(quest) == "table" and quest.close)
+  for _, other in pairs(group or {}) do
+    other = tonumber(other)
+    if other and other ~= id and (pfQuest_history[other]
+      or (pfQuest.questlog and pfQuest.questlog[other])) then return true end
+  end
+  return false
+end
+
 function pfDatabase:QuestFilter(id, plevel, pclass, prace)
   if pfDatabase:IsQuestOfferExcluded(id) then return end
   if self:IsBreadcrumbBlocked(id) then return end
+  if self:IsQuestExclusiveBlocked(id) then return end
   -- fast reject: race, class, and missing loc name are session-constants,
   -- pre-computed in BuildStaticRejectSet to avoid repeating bit ops per call
   if pfDatabase.staticRejectSet[id] then
