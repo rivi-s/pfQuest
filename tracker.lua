@@ -16,7 +16,13 @@ local entryheight = 20
 -- apostrophes). Use a display-independent key so one active quest cannot
 -- occupy two tracker rows through its live and database titles.
 local function TrackerTitleKey(title)
-  return string.lower(string.gsub(title or "", "[^%w]", ""))
+  -- Lua's %w classification depends on the client's character locale. A byte
+  -- of a UTF-8 apostrophe can be treated as a letter in single-byte locales,
+  -- so replace whole punctuation sequences before stripping other separators.
+  title = string.gsub(title or "", "\226\128[\152\153]", "'")
+  title = string.gsub(title, "\202\188", "'")
+  title = string.gsub(title, "\239\188\135", "'")
+  return string.lower(string.gsub(title, "[^%w]", ""))
 end
 
 -- Some clients omit collapsed quests from the list; others still return them.
