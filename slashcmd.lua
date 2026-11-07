@@ -52,8 +52,8 @@ SlashCmdList["PFDB"] = function(input, editbox)
     DEFAULT_CHAT_FRAME:AddMessage(
       "|cff33ffcc/db|cffffffff query |cffcccccc - " .. pfQuest_Loc["Query the server for completed quests"]
     )
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffcc/db|cffffffff version |cffcccccc - Show loaded pfQuest versions")
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffcc/db|cffffffff api |cffcccccc - Show optional API support")
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffcc/db|cffffffff version |cffcccccc - " .. pfQuest_Loc["Show loaded pfQuest versions"])
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffcc/db|cffffffff api |cffcccccc - " .. pfQuest_Loc["Show optional API support"])
     return
   end
 

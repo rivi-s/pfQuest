@@ -54,7 +54,7 @@ local reset = {
 }
 
 StaticPopupDialogs["PFQUEST_DBURL"] = {
-  text = "Quest Database URL\nUse a homepage URL or a prefix ending with ?quest=",
+  text = L["Quest Database URL\nUse a homepage URL or a prefix ending with ?quest="],
   button1 = SAVE,
   button2 = CANCEL,
   hasEditBox = 1,
@@ -91,10 +91,11 @@ local minimapRefreshMenu
 local function OpenMinimapRefreshSelector()
   if not minimapRefreshMenu then
     minimapRefreshMenu = CreateFrame("Frame", "pfQuestMinimapRefreshMenu", UIParent, "UIDropDownMenuTemplate")
+    local modeLabels = { smooth = L["Smooth"], balanced = L["Balanced"], performance = L["Performance"] }
     UIDropDownMenu_Initialize(minimapRefreshMenu, function()
       for _, mode in ipairs({ "smooth", "balanced", "performance" }) do
         local info = UIDropDownMenu_CreateInfo()
-        info.text = mode:gsub("^%l", string.upper)
+        info.text = modeLabels[mode] or mode:gsub("^%l", string.upper)
         info.value = mode
         info.checked = pfQuest_config["minimaprefresh"] == mode
         info.func = function()
@@ -139,27 +140,27 @@ pfQuest_defconfig = {
     type = nil,
   },
 
-  { text = "Interface", default = nil, type = "header", page = "general" },
+  { text = L["Interface"], default = nil, type = "header", page = "general" },
   { text = L["Enable World Map Menu"], default = "1", type = "checkbox", config = "worldmapmenu" },
   { text = L["Enable Minimap Button"], default = "1", type = "checkbox", config = "minimapbutton" },
   { text = L["Enable Quest Tracker"], default = "1", type = "checkbox", config = "showtracker" },
   { text = L["Enable Quest Log Buttons"], default = "1", type = "checkbox", config = "questlogbuttons" },
   { text = L["Enable Quest Link Support"], default = "1", type = "checkbox", config = "questlinks" },
-  { text = "Information & Tooltips", default = nil, type = "header", page = "general" },
-  { text = "Quest Database URL", default = "1", type = "button", func = OpenDatabaseURL },
+  { text = L["Information & Tooltips"], default = nil, type = "header", page = "general" },
+  { text = L["Quest Database URL"], default = "1", type = "button", func = OpenDatabaseURL },
   { text = L["Show Database IDs"], default = "0", type = "checkbox", config = "showids" },
   { text = L["Draw Favorites On Login"], default = "0", type = "checkbox", config = "favonlogin" },
-  { text = L["Minimum Item Drop Chance"], default = "1", type = "text", config = "mindropchance", tooltip = "Filters known item drop sources below this percentage. Vendors are unaffected. Active quest markers refresh after saving; repeat a database search to refresh its existing markers." },
+  { text = L["Minimum Item Drop Chance"], default = "1", type = "text", config = "mindropchance", tooltip = L["Filters known item drop sources below this percentage. Vendors are unaffected. Active quest markers refresh after saving; repeat a database search to refresh its existing markers."] },
   { text = L["Show Tooltips"], default = "1", type = "checkbox", config = "showtooltips" },
   { text = L["Show Help On Tooltips"], default = "1", type = "checkbox", config = "tooltiphelp" },
   { text = L["Show Level On Quest Tracker"], default = "1", type = "checkbox", config = "trackerlevel" },
   { text = L["Show Level On Quest Log"], default = "0", type = "checkbox", config = "questloglevel" },
 
-  { text = "Quest Tracker", default = nil, type = "header", page = "questing" },
+  { text = L["Quest Tracker"], default = nil, type = "header", page = "questing" },
   { text = L["Quest Tracker Visibility"], default = "0", type = "text", config = "trackeralpha" },
   { text = L["Quest Tracker Font Size"], default = "12", type = "text", config = "trackerfontsize" },
   { text = L["Quest Tracker Unfold Objectives"], default = "0", type = "checkbox", config = "trackerexpand" },
-  { text = "Quest Markers", default = nil, type = "header", page = "questing" },
+  { text = L["Quest Markers"], default = nil, type = "header", page = "questing" },
   { text = L["Quest Objective Spawn Points (World Map)"], default = "1", type = "checkbox", config = "showspawn" },
   {
     text = L["Quest Objective Spawn Points (Mini Map)"],
@@ -169,17 +170,17 @@ pfQuest_defconfig = {
   },
   { text = L["Quest Objective Icons (World Map)"], default = "1", type = "checkbox", config = "showcluster" },
   { text = L["Quest Objective Icons (Mini Map)"], default = "0", type = "checkbox", config = "showclustermini" },
-  { text = "Hide Quest Pins In Unexplored Areas", default = "0", type = "checkbox", config = "hideunexplored" },
+  { text = L["Hide Quest Pins In Unexplored Areas"], default = "0", type = "checkbox", config = "hideunexplored" },
   { text = L["Display Available Quest Givers"], default = "1", type = "checkbox", config = "allquestgivers" },
   { text = L["Display Current Quest Givers"], default = "1", type = "checkbox", config = "currentquestgivers" },
   { text = L["Display Low Level Quest Givers"], default = "0", type = "checkbox", config = "showlowlevel" },
   { text = L["Display Level+3 Quest Givers"], default = "0", type = "checkbox", config = "showhighlevel" },
   { text = L["Display Event & Daily Quests"], default = "0", type = "checkbox", config = "showfestival" },
-  { text = L["Display Repeatable Quests"] .. " |cffffcc00[Beta]|r", default = "0", type = "checkbox", config = "showrepeatable", tooltip = "Show known repeatable quest offers with blue exclamation marks. Existing quest requirements still apply. Updates after accepting or turning in a quest are still being tested. Some repeatable quests may be missing; please report them with the quest name and ID if known." },
+  { text = L["Display Repeatable Quests"] .. " |cffffcc00[Beta]|r", default = "0", type = "checkbox", config = "showrepeatable", tooltip = L["Show known repeatable quest offers with blue exclamation marks. Existing quest requirements still apply. Updates after accepting or turning in a quest are still being tested. Some repeatable quests may be missing; please report them with the quest name and ID if known."] },
 
   { text = L["Map & Minimap"], default = nil, type = "header", page = "map" },
   { text = L["Enable Minimap Nodes"], default = "1", type = "checkbox", config = "minimapnodes" },
-  { text = "Minimap Marker Refresh", default = "smooth", type = "button", func = OpenMinimapRefreshSelector },
+  { text = L["Minimap Marker Refresh"], default = "smooth", type = "button", func = OpenMinimapRefreshSelector },
   { text = L["Use Icons For Tracking Nodes"], default = "1", type = "checkbox", config = "trackingicons" },
   { text = L["Use Monochrome Cluster Icons"], default = "0", type = "checkbox", config = "clustermono" },
   { text = L["Use Cut-Out Minimap Node Icons"], default = "1", type = "checkbox", config = "cutoutminimap" },
@@ -190,16 +191,16 @@ pfQuest_defconfig = {
   { text = L["Node Fade Transparency"], default = "0.3", type = "text", config = "nodefade" },
   { text = L["Highlight Nodes On Mouseover"], default = "1", type = "checkbox", config = "mouseover" },
 
-  { text = "Routing", default = nil, type = "header", page = "routes" },
+  { text = L["Routing"], default = nil, type = "header", page = "routes" },
   { text = L["Show Route Between Objects"], default = "1", type = "checkbox", config = "routes" },
   { text = L["Include Unified Quest Locations"], default = "1", type = "checkbox", config = "routecluster" },
   { text = L["Include Quest Enders"], default = "1", type = "checkbox", config = "routeender" },
   { text = L["Include Quest Starters"], default = "0", type = "checkbox", config = "routestarter" },
   { text = L["Show Route On Minimap"], default = "0", type = "checkbox", config = "routeminimap" },
-  { text = "Navigation Arrow", default = nil, type = "header", page = "routes" },
+  { text = L["Navigation Arrow"], default = nil, type = "header", page = "routes" },
   { text = L["Show Arrow Along Routes"], default = "1", type = "checkbox", config = "arrow" },
 
-  { text = "Data & Reset", default = nil, type = "header", page = "general" },
+  { text = L["Data & Reset"], default = nil, type = "header", page = "general" },
   { text = L["Reset Configuration"], default = "1", type = "button", func = reset.config },
   { text = L["Reset Quest History"], default = "1", type = "button", func = reset.history },
   { text = L["Reset Cache"], default = "1", type = "button", func = reset.cache },
@@ -215,9 +216,9 @@ StaticPopupDialogs["PFQUEST_RESET"] = {
 }
 
 StaticPopupDialogs["PFQUEST_RELOAD_REQUIRED"] = {
-  text = "This setting requires a UI reload to take effect.",
-  button1 = "Reload UI",
-  button2 = "Later",
+  text = L["This setting requires a UI reload to take effect."],
+  button1 = L["Reload UI"],
+  button2 = L["Later"],
   OnAccept = ReloadUI,
   timeout = 0,
   whileDead = 1,
@@ -329,9 +330,9 @@ local function CloseConfigWindow()
   if pfQuestConfig.reloadRequired then
     if pfUI and pfUI.api and pfUI.api.CreateQuestionDialog then
       pfUI.api.CreateQuestionDialog(
-        "This setting requires a UI reload to take effect.",
-        { "Reload UI", ReloadUI },
-        { "Later", function() end }
+        L["This setting requires a UI reload to take effect."],
+        { L["Reload UI"], ReloadUI },
+        { L["Later"], function() end }
       )
     else
       StaticPopup_Show("PFQUEST_RELOAD_REQUIRED")
@@ -365,7 +366,7 @@ pfQuestConfig.changelog:SetScript("OnClick", function() pfQuestChangelog:Show() 
 pfQuestConfig.changelog.text = pfQuestConfig.changelog:CreateFontString("Caption", "LOW", "GameFontWhite")
 pfQuestConfig.changelog.text:SetAllPoints(pfQuestConfig.changelog)
 pfQuestConfig.changelog.text:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
-pfQuestConfig.changelog.text:SetText("Changelog")
+pfQuestConfig.changelog.text:SetText(L["Changelog"])
 pfUI.api.SkinButton(pfQuestConfig.changelog)
 local unread = CreateFrame("Frame", nil, pfQuestConfig.changelog)
 pfQuestConfig.changelog.unreadBorder = unread
@@ -532,7 +533,7 @@ local CONFIG_PAGES = {
   { key = "questing", label = L["Questing"] or "Questing" },
   { key = "map", label = L["Map & Minimap"] or "Map" },
   { key = "routes", label = L["Routes"] or "Routes" },
-  { key = "features", label = "Features" },
+  { key = "features", label = L["Features"] },
 }
 
 local function SetCheckboxVisual(input, checked)
@@ -783,7 +784,7 @@ function pfQuestConfig:CreateConfigEntries(config)
         frame.input.text = frame.input:CreateFontString("Caption", "LOW", "GameFontWhite")
         frame.input.text:SetAllPoints(frame.input)
         frame.input.text:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
-        frame.input.text:SetText("OK")
+        frame.input.text:SetText(L["OK"])
         pfUI.api.SkinButton(frame.input)
       end
 

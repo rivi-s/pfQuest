@@ -456,13 +456,17 @@ if isempty(pfDB["quests"]["loc"]) then
       return
     end
     DEFAULT_CHAT_FRAME:AddMessage(
-      "|cffff5555 !! |cffffaaaaWrong version of |cff33ffccpf|cffffffffQuest|cffffaaaa detected.|cffff5555 !!"
+      "|cffff5555 !! |cffffaaaa"
+        .. pfQuest_Loc["Wrong version of |cff33ffccpf|cffffffffQuest|cffffaaaa detected."]
+        .. "|cffff5555 !!"
     )
-    DEFAULT_CHAT_FRAME:AddMessage("|cffffccccThe language pack does not match the gameclient's language.")
     DEFAULT_CHAT_FRAME:AddMessage(
-      "|cffffccccYou'd either need to pick the complete or the " .. GetLocale() .. "-version."
+      "|cffffcccc" .. pfQuest_Loc["The language pack does not match the gameclient's language."]
     )
-    DEFAULT_CHAT_FRAME:AddMessage("|cffffccccFor more details, see: https://shagu.org/pfQuest")
+    DEFAULT_CHAT_FRAME:AddMessage(
+      "|cffffcccc" .. string.format(pfQuest_Loc["You'd either need to pick the complete or the %s-version."], GetLocale())
+    )
+    DEFAULT_CHAT_FRAME:AddMessage("|cffffcccc" .. pfQuest_Loc["For more details, see: https://shagu.org/pfQuest"])
     this:Hide()
   end)
 end
@@ -2672,7 +2676,7 @@ end
 function pfDatabase:QueryServer()
   -- break here on incompatible versions
   if not QueryQuestsCompleted then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpf|cffffffffQuest: Option is not available on your server.")
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpf|cffffffffQuest: " .. pfQuest_Loc["Option is not available on your server."])
     return
   end
 
