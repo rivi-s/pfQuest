@@ -1325,7 +1325,8 @@ function pfMap:UpdateNode(frame, node, color, obj, distance)
     frame.tex:SetVertexColor(1, 1, 1)
     frame.pic:Hide()
 
-    if frame.updateVertex and frame.vertex then
+    -- SetTexture resets the tint even when the vertex table is unchanged.
+    if frame.vertex then
       local r, g, b = unpack(frame.vertex)
       if r > 0 or g > 0 or b > 0 then
         frame.tex:SetVertexColor(r, g, b, 1)
