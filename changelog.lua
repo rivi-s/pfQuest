@@ -77,7 +77,7 @@ function changelog:Announce()
     end
   end
   if updated then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpfQuest|r updated. Open Settings > Changelog to see what's new.")
+    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccpfQuest|r " .. pfQuest_Loc["updated. Open Settings > Changelog to see what's new."])
   end
   self:UpdateButton()
 end
@@ -101,7 +101,7 @@ function changelog:Show()
 
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", f, "TOPLEFT", 16, -12)
-    title:SetText("|cff33ffccpfQuest|r Changelog")
+    title:SetText("|cff33ffccpfQuest|r " .. pfQuest_Loc["Changelog"])
     local close = CreateFrame("Button", nil, f)
     close:SetWidth(24)
     close:SetHeight(24)

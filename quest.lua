@@ -918,11 +918,11 @@ function pfQuest:AddWorldMapIntegration()
   PositionMapLevelButton()
 
   local levelModes = {
-    { value = "red", name = "Red", color = "|cffff2020" },
-    { value = "orange", name = "Orange", color = "|cffff8040" },
-    { value = "yellow", name = "Yellow", color = "|cffffff00" },
-    { value = "green", name = "Green", color = "|cff40c040" },
-    { value = "gray", name = "Grey", color = "|cff999999" },
+    { value = "red", name = pfQuest_Loc["Red"], color = "|cffff2020" },
+    { value = "orange", name = pfQuest_Loc["Orange"], color = "|cffff8040" },
+    { value = "yellow", name = pfQuest_Loc["Yellow"], color = "|cffffff00" },
+    { value = "green", name = pfQuest_Loc["Green"], color = "|cff40c040" },
+    { value = "gray", name = pfQuest_Loc["Grey"], color = "|cff999999" },
   }
 
   local function GetSelectedLevelRange()
@@ -936,7 +936,7 @@ function pfQuest:AddWorldMapIntegration()
 
   local function CreateLevelRangeEntries()
     local selected = GetSelectedLevelRange()
-    local direction = pfQuest_config["questpinleveldirection"] == "higher" and "Higher" or "Lower"
+    local direction = pfQuest_config["questpinleveldirection"] == "higher" and pfQuest_Loc["Higher"] or pfQuest_Loc["Lower"]
     for index, mode in ipairs(levelModes) do
       -- Use a fresh table because the legacy dropdown reuses its row frames.
       local info = {}
@@ -980,7 +980,7 @@ function pfQuest:AddWorldMapIntegration()
       UIDropDownMenu_SetButtonWidth(125, pfQuest.mapLevelButton)
       UIDropDownMenu_JustifyText("RIGHT", pfQuest.mapLevelButton)
     end
-    pfQuest.mapLevelButton.currentLabel = "Level Range"
+    pfQuest.mapLevelButton.currentLabel = pfQuest_Loc["Level Range"]
     local direction = pfQuest_config["questpinleveldirection"] == "higher" and "higher" or "lower"
     if pfQuest.mapLevelButton.directionArrow then
       pfQuest.mapLevelButton.directionArrow:SetText(direction == "higher" and "|cffffcc00^|r" or "|cffffcc00v|r")
@@ -988,9 +988,9 @@ function pfQuest:AddWorldMapIntegration()
     -- Moving this control out of the map canvas prevents the legacy template
     -- from repainting its selected caption automatically.
     if client >= 30300 then
-      UIDropDownMenu_SetText(pfQuest.mapLevelButton, "Level Range")
+      UIDropDownMenu_SetText(pfQuest.mapLevelButton, pfQuest_Loc["Level Range"])
     else
-      UIDropDownMenu_SetText("Level Range", pfQuest.mapLevelButton)
+      UIDropDownMenu_SetText(pfQuest_Loc["Level Range"], pfQuest.mapLevelButton)
     end
     -- The stock template anchors its text to the map canvas. This dropdown is
     -- intentionally in WorldMapFrame, so anchor the existing text child to
@@ -1004,7 +1004,7 @@ function pfQuest:AddWorldMapIntegration()
       text:SetJustifyH("RIGHT")
       text:SetDrawLayer("OVERLAY")
       text:SetAlpha(1)
-      text:SetText("Level Range")
+      text:SetText(pfQuest_Loc["Level Range"])
       text:Show()
       if mapText and mapText.GetFont then
         local font, size, flags = mapText:GetFont()
@@ -1027,8 +1027,8 @@ function pfQuest:AddWorldMapIntegration()
 
   local function ShowLevelRangeHelp(owner)
     GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
-    GameTooltip:SetText("Level Range")
-    GameTooltip:AddLine("Right-click: Reverse direction", 1, 1, 1)
+    GameTooltip:SetText(pfQuest_Loc["Level Range"])
+    GameTooltip:AddLine(pfQuest_Loc["Right-click: Reverse direction"], 1, 1, 1)
     GameTooltip:Show()
   end
 

@@ -118,12 +118,14 @@ local function UpdateSortButton()
     tracker.btnsort:Show()
     if GetQuestSortMode() == "distance" then
       tracker.btnsort.label:SetText("N")
-      tracker.btnsort.tooltip = "Quest Sort: Nearest First\n|cff33ffcc<Click>|r Sort By Level"
+      tracker.btnsort.tooltip = pfQuest_Loc["Quest Sort: Nearest First\n|cff33ffcc<Click>|r Sort By Level"]
     else
       tracker.btnsort.label:SetText("L")
-      local direction = IsLevelSortAscending() and "Low to High" or "High to Low"
-      tracker.btnsort.tooltip = "Quest Sort: Level (" .. direction
-        .. ")\n|cff33ffcc<Click>|r Sort By Nearest\n|cff33ffcc<Right-Click>|r Reverse Level Order"
+      local direction = IsLevelSortAscending() and pfQuest_Loc["Low to High"] or pfQuest_Loc["High to Low"]
+      tracker.btnsort.tooltip = string.format(
+        pfQuest_Loc["Quest Sort: Level (%s)\n|cff33ffcc<Click>|r Sort By Nearest\n|cff33ffcc<Right-Click>|r Reverse Level Order"],
+        direction
+      )
     end
   else
     tracker.btnsort:Hide()
@@ -407,7 +409,7 @@ do -- button panel
   tracker.btnsort:SetPoint("TOPRIGHT", -69, -1)
   tracker.btnsort:SetWidth(panelheight - 2)
   tracker.btnsort:SetHeight(panelheight - 2)
-  tracker.btnsort.tooltip = "Quest Sort"
+  tracker.btnsort.tooltip = pfQuest_Loc["Quest Sort"]
   tracker.btnsort.bg = tracker.btnsort:CreateTexture(nil, "BACKGROUND")
   tracker.btnsort.bg:SetAllPoints()
   tracker.btnsort.bg:SetTexture(0, 0, 0, 0)
