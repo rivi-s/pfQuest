@@ -2165,6 +2165,9 @@ function pfDatabase:AddCustomIcon(id, img, root)
 end
 
 function pfDatabase:FormatQuestText(questText)
+  if not questText then
+    return ""
+  end
   questText = string.gsub(questText, "$[Nn]", UnitName("player"))
   questText = string.gsub(questText, "$[Cc]", strlower(UnitClass("player")))
   questText = string.gsub(questText, "$[Rr]", strlower(UnitRace("player")))
